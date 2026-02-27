@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -35,8 +34,7 @@ func main() {
 	glpiClient := glpi.NewClient(cfg.NexusBaseURL, cfg.NexusAppToken)
 	waClient := whatsapp.NewClient(cfg.WAPhoneNumberID, cfg.WAAccessToken)
 
-	authURL := fmt.Sprintf("http://localhost:%s", cfg.Port)
-	botHandler := bot.NewHandler(waClient, glpiClient, db, authURL)
+	botHandler := bot.NewHandler(waClient, glpiClient, db, cfg.BaseURL)
 	authHandler := auth.NewHandler(glpiClient, db)
 	webhookHandler := whatsapp.NewWebhookHandler(cfg.WAVerifyToken, botHandler.HandleMessage)
 

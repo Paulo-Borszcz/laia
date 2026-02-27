@@ -17,7 +17,8 @@ type Config struct {
 	WAAccessToken   string
 	WAVerifyToken   string
 
-	Port string
+	BaseURL string
+	Port    string
 }
 
 func Load() (*Config, error) {
@@ -30,11 +31,16 @@ func Load() (*Config, error) {
 		WAPhoneNumberID: os.Getenv("WA_PHONE_NUMBER_ID"),
 		WAAccessToken:   os.Getenv("WA_ACCESS_TOKEN"),
 		WAVerifyToken:   os.Getenv("WA_VERIFY_TOKEN"),
+		BaseURL:         os.Getenv("BASE_URL"),
 		Port:            os.Getenv("PORT"),
 	}
 
 	if cfg.Port == "" {
 		cfg.Port = "8080"
+	}
+
+	if cfg.BaseURL == "" {
+		cfg.BaseURL = fmt.Sprintf("http://localhost:%s", cfg.Port)
 	}
 
 	if cfg.WAVerifyToken == "" {
