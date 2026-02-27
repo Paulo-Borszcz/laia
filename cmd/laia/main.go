@@ -49,7 +49,7 @@ func main() {
 	agent := ai.NewAgent(geminiClient, glpiClient, db, aitools.BuildRegistry)
 
 	botHandler := bot.NewHandler(waClient, db, cfg.BaseURL, agent)
-	authHandler := auth.NewHandler(glpiClient, db)
+	authHandler := auth.NewHandler(glpiClient, db, waClient)
 	webhookHandler := whatsapp.NewWebhookHandler(cfg.WAVerifyToken, botHandler.HandleMessage)
 
 	r := chi.NewRouter()

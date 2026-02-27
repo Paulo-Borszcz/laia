@@ -2,6 +2,7 @@ package auth
 
 import (
 	"embed"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/lojasmm/laia/internal/glpi"
 	"github.com/lojasmm/laia/internal/store"
+	"github.com/lojasmm/laia/internal/whatsapp"
 )
 
 //go:embed page.html
@@ -25,10 +27,11 @@ type pageData struct {
 type Handler struct {
 	glpi  *glpi.Client
 	store store.Store
+	wa    *whatsapp.Client
 }
 
-func NewHandler(g *glpi.Client, s store.Store) *Handler {
-	return &Handler{glpi: g, store: s}
+func NewHandler(g *glpi.Client, s store.Store, wa *whatsapp.Client) *Handler {
+	return &Handler{glpi: g, store: s, wa: wa}
 }
 
 func (h *Handler) HandleVerifyPage(w http.ResponseWriter, r *http.Request) {
@@ -98,9 +101,15 @@ func (h *Handler) HandleVerifySubmit(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("auth: user %s (%d) linked to phone %s", u.Name, u.GLPIUserID, phone)
 
-	pageTmpl.Execute(w, pageData{
-		Phone:   phone,
-		Message: "Verificação concluída! Seu WhatsApp está vinculado ao Nexus. Pode voltar ao chat.",
-		Success: true,
-	})
+	msg := fmt.Sprintf(
+		"Olá, %s! Seu WhatsApp foi vinculado ao Nexus com sucesso.\n\nNo que posso te ajudar hoje?",
+		u.Name,
+	)
+	if err := h.wa.SendText(phone, msg); err != nil {
+		log.Printf("auth: failed to send welcome message to %s: %v", phone, err)
+	}
+
+	// Redirecionar pro WhatsApp
+	waURL := fmt.Sprintf("https://wa.me/%s", phone)
+	http.Redirect(w, r, waURL, http.StatusSeeOther)
 }
