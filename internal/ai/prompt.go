@@ -63,6 +63,7 @@ ETAPA 3 — CONFIRMAÇÃO:
    • *Urgência:* W
    Posso prosseguir?"
 - Só chame create_ticket após "sim", "ok", "pode" ou confirmação similar
+- SEMPRE passe department_id E category_id no create_ticket (ambos obrigatórios)
 - Se pedir ajuste, volte à etapa relevante
 
 IMPORTANTE: NUNCA pule etapas. Mesmo que o usuário diga "abre chamado X",

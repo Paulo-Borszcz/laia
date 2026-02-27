@@ -584,6 +584,65 @@ func (c *Client) GetSectionQuestions(sessionToken string, sectionID int) ([]Form
 	return questions, nil
 }
 
+// GetTargetTickets returns FormCreator target tickets for a given form.
+// Reference: GET /apirest.php/PluginFormcreatorTargetTicket/
+func (c *Client) GetTargetTickets(sessionToken string, formID int) ([]TargetTicket, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/apirest.php/PluginFormcreatorTargetTicket/", nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setSessionHeaders(req, sessionToken)
+
+	q := req.URL.Query()
+	q.Set("searchText[plugin_formcreator_forms_id]", fmt.Sprintf("%d", formID))
+	req.URL.RawQuery = q.Encode()
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getTargetTickets request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("getTargetTickets status %d: %s", resp.StatusCode, body)
+	}
+
+	var targets []TargetTicket
+	if err := json.NewDecoder(resp.Body).Decode(&targets); err != nil {
+		return nil, fmt.Errorf("decoding target tickets: %w", err)
+	}
+	return targets, nil
+}
+
+// GetTargetActors returns actors configured for a FormCreator target ticket.
+// Reference: GET /apirest.php/PluginFormcreatorTargetTicket/:id/PluginFormcreatorTarget_Actor
+func (c *Client) GetTargetActors(sessionToken string, targetID int) ([]TargetActor, error) {
+	url := fmt.Sprintf("%s/apirest.php/PluginFormcreatorTargetTicket/%d/PluginFormcreatorTarget_Actor", c.baseURL, targetID)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setSessionHeaders(req, sessionToken)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getTargetActors request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("getTargetActors status %d: %s", resp.StatusCode, body)
+	}
+
+	var actors []TargetActor
+	if err := json.NewDecoder(resp.Body).Decode(&actors); err != nil {
+		return nil, fmt.Errorf("decoding target actors: %w", err)
+	}
+	return actors, nil
+}
+
 // GetCategories returns ITIL ticket categories filtered by parent.
 // parentID=0 returns root categories (departments), parentID>0 returns sub-categories.
 // Uses the list endpoint with searchText filter on itilcategories_id.

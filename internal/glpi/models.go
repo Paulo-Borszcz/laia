@@ -48,12 +48,30 @@ type Followup struct {
 }
 
 type CreateTicketInput struct {
-	Name               string `json:"name"`
-	Content            string `json:"content"`
-	ITILCategoriesID   int    `json:"itilcategories_id,omitempty"`
-	Urgency            int    `json:"urgency,omitempty"`
-	Type               int    `json:"type,omitempty"`
-	UsersIDRequester   int    `json:"_users_id_requester,omitempty"`
+	Name             string `json:"name"`
+	Content          string `json:"content"`
+	ITILCategoriesID int    `json:"itilcategories_id,omitempty"`
+	Urgency          int    `json:"urgency,omitempty"`
+	Type             int    `json:"type,omitempty"`
+	UsersIDRequester int    `json:"_users_id_requester,omitempty"`
+	UsersIDAssign    []int  `json:"_users_id_assign,omitempty"`
+	GroupsIDAssign   []int  `json:"_groups_id_assign,omitempty"`
+	UsersIDObserver  []int  `json:"_users_id_observer,omitempty"`
+	GroupsIDObserver []int  `json:"_groups_id_observer,omitempty"`
+}
+
+// TargetTicket is a FormCreator target that defines how a ticket is created from a form.
+type TargetTicket struct {
+	ID                       int `json:"id"`
+	PluginFormcreatorFormsID int `json:"plugin_formcreator_forms_id"`
+}
+
+// TargetActor defines an actor (requester/assigned/observer) for a target ticket.
+type TargetActor struct {
+	ID         int `json:"id"`
+	ActorRole  int `json:"actor_role"`  // 1=Requester, 2=Assigned, 3=Observer
+	ActorType  int `json:"actor_type"`  // 1=Creator, 3=Specific user, 5=Specific group
+	ActorValue int `json:"actor_value"` // user/group ID (0 for Creator type)
 }
 
 type UpdateTicketInput struct {

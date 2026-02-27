@@ -112,12 +112,13 @@ func (t *CreateTicket) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
 		Type: "object",
 		Properties: map[string]*ai.ParamSchema{
-			"title":       {Type: "string", Description: "Título do chamado"},
-			"description": {Type: "string", Description: "Descrição detalhada do problema"},
-			"category_id": {Type: "integer", Description: "ID da categoria ITIL (obrigatório, obtido via get_department_categories)"},
-			"urgency":     {Type: "integer", Description: "Urgência: 1=Muito baixa, 2=Baixa, 3=Média, 4=Alta, 5=Muito alta"},
+			"title":         {Type: "string", Description: "Título do chamado"},
+			"description":   {Type: "string", Description: "Descrição detalhada do problema"},
+			"category_id":   {Type: "integer", Description: "ID da categoria ITIL (obrigatório, obtido via get_department_categories)"},
+			"department_id": {Type: "integer", Description: "ID do departamento/formulário (obtido via get_departments)"},
+			"urgency":       {Type: "integer", Description: "Urgência: 1=Muito baixa, 2=Baixa, 3=Média, 4=Alta, 5=Muito alta"},
 		},
-		Required: []string{"title", "description", "category_id"},
+		Required: []string{"title", "description", "category_id", "department_id"},
 	}
 }
 
@@ -132,6 +133,8 @@ func (t *CreateTicket) Execute(_ context.Context, args map[string]any) (map[stri
 	if err != nil || catID <= 0 {
 		return nil, fmt.Errorf("category_id é obrigatório — use get_department_categories para obter o ID")
 	}
+
+	formID, _ := intArg(args, "department_id")
 
 	// Usa admin session pois usuários self-service não têm permissão
 	// para criar tickets diretamente via API (só via FormCreator na web).
@@ -152,11 +155,52 @@ func (t *CreateTicket) Execute(_ context.Context, args map[string]any) (map[stri
 		input.Urgency = urgency
 	}
 
+	// Aplica as mesmas regras de actors do FormCreator (observadores, grupos atribuídos)
+	if formID > 0 {
+		applyFormActors(t.glpi, adminSession, formID, t.userID, &input)
+	}
+
 	id, err := t.glpi.CreateTicket(adminSession, input)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao criar chamado: %w", err)
 	}
 	return map[string]any{"id": id, "mensagem": fmt.Sprintf("Chamado #%d criado com sucesso", id)}, nil
+}
+
+// applyFormActors reads the FormCreator target ticket config and applies the
+// same actors (assigned groups/users, observers) that the web form would apply.
+func applyFormActors(g *glpi.Client, session string, formID, requesterID int, input *glpi.CreateTicketInput) {
+	targets, err := g.GetTargetTickets(session, formID)
+	if err != nil || len(targets) == 0 {
+		return
+	}
+
+	actors, err := g.GetTargetActors(session, targets[0].ID)
+	if err != nil {
+		return
+	}
+
+	for _, a := range actors {
+		if a.ActorValue == 0 && a.ActorType == 1 {
+			continue // Creator = requester, already set
+		}
+		switch a.ActorRole {
+		case 2: // Assigned
+			switch a.ActorType {
+			case 3: // Specific user
+				input.UsersIDAssign = append(input.UsersIDAssign, a.ActorValue)
+			case 5: // Specific group
+				input.GroupsIDAssign = append(input.GroupsIDAssign, a.ActorValue)
+			}
+		case 3: // Observer
+			switch a.ActorType {
+			case 3: // Specific user
+				input.UsersIDObserver = append(input.UsersIDObserver, a.ActorValue)
+			case 5: // Specific group
+				input.GroupsIDObserver = append(input.GroupsIDObserver, a.ActorValue)
+			}
+		}
+	}
 }
 
 // --- UpdateTicketStatus ---
