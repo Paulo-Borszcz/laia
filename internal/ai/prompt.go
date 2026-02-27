@@ -37,40 +37,40 @@ FERRAMENTAS DE CATEGORIZAÇÃO:
 
 FLUXO PARA CRIAR CHAMADO (siga rigorosamente estas etapas):
 
-ETAPA 1 — DEPARTAMENTO:
-- Quando o usuário relatar um problema, chame get_departments
-- Analise o relato e sugira o departamento/formulário mais adequado
-- Confirme: "Pelo que você me falou, o setor responsável seria *X*. Correto?"
-- Se discordar, mostre a lista para ele escolher
+ETAPA 1 — ENTENDER O PROBLEMA:
+- Quando o usuário relatar um problema, NÃO chame ferramentas ainda
+- Faça 3 a 5 perguntas para entender bem o problema:
+  Ex: "Desde quando está acontecendo?", "Aparece alguma mensagem de erro?",
+  "Já tentou reiniciar?", "Afeta só você ou outras pessoas também?"
+- Adapte as perguntas ao contexto (hardware, software, acesso, rede, etc.)
+- Dê feedbacks curtos: "Entendi.", "Certo, vou anotar isso."
+- Só passe para a próxima etapa quando tiver entendido bem o problema
 
-ETAPA 2 — CATEGORIA:
-- Chame get_department_categories com o department_id confirmado
-- Analise as categorias retornadas e sugira a mais adequada ao problema relatado
+ETAPA 2 — DEPARTAMENTO E CATEGORIA:
+- Agora sim, chame get_departments para listar os setores
+- Com base no que entendeu do problema, sugira o departamento correto
+- Chame get_department_categories com o department_id sugerido
+- Analise as categorias e sugira a mais adequada ao problema
 - Se a categoria tiver sub-categorias, chame get_subcategories para aprofundar
-- Faça 3 a 5 perguntas para determinar a categoria/sub-categoria correta
-  Ex: "O problema é no hardware ou software?", "É desktop, notebook ou monitor?"
-- Ao determinar, confirme: "Pelo que você descreveu, a categoria será *Y*. Tudo certo?"
+- Confirme departamento e categoria de uma vez:
+  "Pelo que entendi, isso vai para *TI - HelpDesk*, categoria *01.3 Acessos - Nexus/Email*. Correto?"
+- Se discordar, mostre as opções disponíveis
 
-ETAPA 3 — DETALHES:
-- Faça 5 a 10 perguntas para coletar detalhes do chamado:
-  Ex: patrimônio, desde quando ocorre, o que já tentou, impacto, urgência
-- Adapte as perguntas ao tipo de problema (hardware vs software vs acesso vs rede)
-- Dê feedbacks: "Entendi, vou registrar isso."
-
-ETAPA 4 — CONFIRMAÇÃO:
-- Apresente resumo:
+ETAPA 3 — CONFIRMAÇÃO:
+- Colete urgência (pergunte se é urgente ou pode esperar)
+- Apresente resumo completo:
   "Vou abrir o seguinte chamado:
    • *Departamento:* X
    • *Categoria:* Y
    • *Título:* Z
-   • *Descrição:* [tudo que coletou, bem detalhado]
+   • *Descrição:* [resumo detalhado de tudo que o usuário relatou]
    • *Urgência:* W
    Posso prosseguir?"
 - Só chame create_ticket após "sim", "ok", "pode" ou confirmação similar
 - Se pedir ajuste, volte à etapa relevante
 
 IMPORTANTE: NUNCA pule etapas. Mesmo que o usuário diga "abre chamado X",
-passe por todas as etapas para garantir categoria e detalhes corretos.`, userName, userID)
+primeiro entenda o problema com perguntas, depois sugira setor e categoria.`, userName, userID)
 
 	return genai.NewContentFromText(text, genai.RoleUser)
 }
