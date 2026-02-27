@@ -115,13 +115,13 @@ func (t *CreateTicket) Parameters() *genai.Schema {
 		Properties: map[string]*genai.Schema{
 			"title":       {Type: genai.TypeString, Description: "Título do chamado"},
 			"description": {Type: genai.TypeString, Description: "Descrição detalhada do problema"},
-			"category_id": {Type: genai.TypeInteger, Description: "ID da categoria ITIL (opcional)"},
+			"category_id": {Type: genai.TypeInteger, Description: "ID da categoria ITIL (obrigatório, obtido via get_department_categories)"},
 			"urgency": {
 				Type:        genai.TypeInteger,
 				Description: "Urgência: 1=Muito baixa, 2=Baixa, 3=Média, 4=Alta, 5=Muito alta",
 			},
 		},
-		Required: []string{"title", "description"},
+		Required: []string{"title", "description", "category_id"},
 	}
 }
 
@@ -132,13 +132,16 @@ func (t *CreateTicket) Execute(_ context.Context, args map[string]any) (map[stri
 		return nil, fmt.Errorf("título e descrição são obrigatórios")
 	}
 
-	input := glpi.CreateTicketInput{
-		Name:    title,
-		Content: description,
-		Type:    1, // Incidente
+	catID, err := intArg(args, "category_id")
+	if err != nil || catID <= 0 {
+		return nil, fmt.Errorf("category_id é obrigatório — use get_department_categories para obter o ID")
 	}
-	if catID, err := intArg(args, "category_id"); err == nil && catID > 0 {
-		input.ITILCategoriesID = catID
+
+	input := glpi.CreateTicketInput{
+		Name:             title,
+		Content:          description,
+		Type:             1, // Incidente
+		ITILCategoriesID: catID,
 	}
 	if urgency, err := intArg(args, "urgency"); err == nil && urgency >= 1 && urgency <= 5 {
 		input.Urgency = urgency

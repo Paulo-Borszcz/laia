@@ -20,7 +20,8 @@ func BuildRegistry(g *glpi.Client, sessionToken string, userID int) *ai.Registry
 	r.Register(NewSearchKnowledgeBase(g, sessionToken))
 	r.Register(NewGetKBArticle(g, sessionToken))
 	r.Register(NewSearchAssets(g, sessionToken))
-	r.Register(NewGetCategories(g, sessionToken))
+	r.Register(NewGetDepartments(g, sessionToken))
+	r.Register(NewGetDepartmentCategories(g, sessionToken))
 	return r
 }
 

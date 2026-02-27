@@ -76,9 +76,10 @@ type KBArticle struct {
 }
 
 type ITILCategory struct {
-	ID           int    `json:"id"`
-	Name         string `json:"name"`
-	Completename string `json:"completename"`
+	ID               int    `json:"id"`
+	Name             string `json:"name"`
+	Completename     string `json:"completename"`
+	ITILCategoriesID int    `json:"itilcategories_id"`
 }
 
 // glpiInput wraps a value in the {"input": ...} envelope required by GLPI POST/PUT.
