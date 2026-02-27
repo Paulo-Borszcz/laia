@@ -101,11 +101,21 @@ func (h *Handler) HandleVerifySubmit(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("auth: user %s (%d) linked to phone %s", u.Name, u.GLPIUserID, phone)
 
-	msg := fmt.Sprintf(
-		"Olá, %s! Seu WhatsApp foi vinculado ao Nexus com sucesso.\n\nNo que posso te ajudar hoje?",
+	body := fmt.Sprintf(
+		"✅ *Pronto, %s!*\n\n"+
+			"Seu WhatsApp foi vinculado ao Nexus com sucesso.\n\n"+
+			"Aqui estão algumas coisas que posso fazer por você:\n\n"+
+			"📋 Abrir e acompanhar chamados\n"+
+			"💬 Adicionar comentários\n"+
+			"🔍 Buscar na base de conhecimento\n\n"+
+			"_É só me mandar uma mensagem!_",
 		u.Name,
 	)
-	if err := h.wa.SendText(phone, msg); err != nil {
+	buttons := []whatsapp.Button{
+		{Type: "reply", Reply: whatsapp.ButtonReply{ID: "action_new_ticket", Title: "Abrir chamado"}},
+		{Type: "reply", Reply: whatsapp.ButtonReply{ID: "action_my_tickets", Title: "Meus chamados"}},
+	}
+	if err := h.wa.SendInteractiveButtons(phone, body, buttons); err != nil {
 		log.Printf("auth: failed to send welcome message to %s: %v", phone, err)
 	}
 
