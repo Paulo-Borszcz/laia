@@ -175,6 +175,18 @@ func (a *Agent) Handle(ctx context.Context, user *store.User, phone, text string
 				var args map[string]any
 				json.Unmarshal([]byte(tc.Function.Arguments), &args)
 				r := parseInteractiveResponse(args)
+				// Add synthetic tool response so OpenAI doesn't reject
+				// the history on the next turn (every tool_call needs a response)
+				allTurns = append(allTurns, store.ConversationTurn{
+					Role: "tool",
+					Parts: []store.TurnPart{{
+						FunctionResponse: &store.FunctionRespPart{
+							ToolCallID: tc.ID,
+							Name:       tc.Function.Name,
+							Response:   map[string]any{"status": "delivered"},
+						},
+					}},
+				})
 				a.saveHistory(phone, allTurns)
 				return r, nil
 			}
