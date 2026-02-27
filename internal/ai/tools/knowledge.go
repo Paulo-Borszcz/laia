@@ -19,12 +19,14 @@ func NewSearchKnowledgeBase(g *glpi.Client, token string) *SearchKnowledgeBase {
 	return &SearchKnowledgeBase{glpi: g, sessionToken: token}
 }
 
-func (t *SearchKnowledgeBase) Name() string { return "search_knowledge_base" }
+func (t *SearchKnowledgeBase) Name() string     { return "search_knowledge_base" }
+func (t *SearchKnowledgeBase) ReadOnly() bool { return true }
 func (t *SearchKnowledgeBase) Description() string {
 	return `Busca artigos na base de conhecimento do Nexus/GLPI.
 Quando usar: quando o usuario perguntar "como faz...", "tem tutorial de...", "como configurar...", ou buscar solucoes para problemas conhecidos.
-Retorna: lista com id, nome e preview do conteudo de cada artigo.
-Use get_kb_article para ler o conteudo completo de um artigo especifico.`
+O preview do conteudo e truncado a 200 caracteres — use get_kb_article para ler o artigo completo.
+Se nenhum artigo for encontrado, sugira ao usuario abrir um chamado para obter ajuda.
+Retorna: {total, artigos: [{id, nome, preview}]}.`
 }
 func (t *SearchKnowledgeBase) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
@@ -73,11 +75,13 @@ func NewGetKBArticle(g *glpi.Client, token string) *GetKBArticle {
 	return &GetKBArticle{glpi: g, sessionToken: token}
 }
 
-func (t *GetKBArticle) Name() string { return "get_kb_article" }
+func (t *GetKBArticle) Name() string     { return "get_kb_article" }
+func (t *GetKBArticle) ReadOnly() bool { return true }
 func (t *GetKBArticle) Description() string {
 	return `Retorna o conteudo completo de um artigo da base de conhecimento.
 Quando usar: apos search_knowledge_base encontrar um artigo relevante, use esta ferramenta para ler o conteudo completo.
-Retorna: id, titulo e conteudo HTML do artigo.`
+O conteudo vem em formato HTML. Ao apresentar ao usuario, converta para formatacao WhatsApp: *negrito*, _italico_, listas com •.
+Retorna: {id, titulo, conteudo} onde conteudo e o HTML do artigo.`
 }
 func (t *GetKBArticle) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{

@@ -21,13 +21,15 @@ func NewListMyTickets(g *glpi.Client, token string) *ListMyTickets {
 	return &ListMyTickets{glpi: g, sessionToken: token}
 }
 
-func (t *ListMyTickets) Name() string { return "list_my_tickets" }
+func (t *ListMyTickets) Name() string     { return "list_my_tickets" }
+func (t *ListMyTickets) ReadOnly() bool    { return true }
 func (t *ListMyTickets) Description() string {
 	return `Lista os chamados do usuario atual no Nexus/GLPI.
 Quando usar: quando o usuario quiser ver seus proprios chamados sem filtros complexos. Ex: "meus chamados", "meu ultimo chamado".
-Parametros opcionais: status (filtra por estado), limit (quantidade maxima de resultados).
-Retorna: lista com id, nome, status e data de cada chamado.
-Prefira search_tickets_advanced quando houver filtros por texto, periodo, urgencia ou tecnico.`
+NAO usar: quando houver filtros por texto, periodo, urgencia ou tecnico — use search_tickets_advanced.
+Parametros opcionais: status (filtra por estado), limit (quantidade maxima, default 20).
+Use limit=1 para "meu ultimo chamado" — retorna o mais recente.
+Retorna: {total, chamados: [{id, nome, status, data}]}. Ordenado por data de criacao (mais recente primeiro).`
 }
 func (t *ListMyTickets) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
@@ -97,9 +99,15 @@ func NewGetTicket(g *glpi.Client, token string, userID int) *GetTicket {
 	return &GetTicket{glpi: g, sessionToken: token, userID: userID}
 }
 
-func (t *GetTicket) Name() string { return "get_ticket" }
+func (t *GetTicket) Name() string  { return "get_ticket" }
+func (t *GetTicket) ReadOnly() bool { return true }
 func (t *GetTicket) Description() string {
-	return "Retorna detalhes de um chamado específico pelo ID"
+	return `Retorna detalhes completos de um chamado especifico pelo ID.
+Quando usar: quando o usuario mencionar um numero de chamado ou quiser ver detalhes de um chamado especifico. Ex: "chamado 12345", "detalhes do meu chamado".
+NAO usar: sem ter o ID — busque primeiro com list_my_tickets ou search_tickets_advanced.
+Retorna: {id, titulo, descricao, status, urgencia, prioridade, categoria (ID numerico), criado_em, atualizado_em}.
+O campo 'categoria' retorna o ID da categoria ITIL, nao o nome.
+O usuario so vera chamados que tenha permissao de acesso no GLPI.`
 }
 func (t *GetTicket) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
@@ -146,9 +154,15 @@ func NewCreateTicket(g *glpi.Client, userID int) *CreateTicket {
 	return &CreateTicket{glpi: g, userID: userID}
 }
 
-func (t *CreateTicket) Name() string { return "create_ticket" }
+func (t *CreateTicket) Name() string    { return "create_ticket" }
+func (t *CreateTicket) ReadOnly() bool   { return false }
 func (t *CreateTicket) Description() string {
-	return "Cria um novo chamado no Nexus/GLPI. Use somente após confirmação do usuário."
+	return `Cria um novo chamado no Nexus/GLPI.
+Quando usar: SOMENTE apos confirmacao explicita do usuario via respond_interactive (Etapa 4 do fluxo de criacao).
+NUNCA chame sem ter passado pelas Etapas 1-3 (entender problema, determinar setor, determinar categoria).
+Confirme todos os dados com o usuario antes de chamar esta ferramenta.
+Requer: title, description, category_id (de get_department_categories) e department_id (de get_departments).
+Retorna: {id, mensagem} com o numero do chamado criado.`
 }
 func (t *CreateTicket) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
@@ -258,9 +272,15 @@ func NewUpdateTicket(g *glpi.Client, token string, userID int) *UpdateTicket {
 	return &UpdateTicket{glpi: g, sessionToken: token, userID: userID}
 }
 
-func (t *UpdateTicket) Name() string { return "update_ticket" }
+func (t *UpdateTicket) Name() string    { return "update_ticket" }
+func (t *UpdateTicket) ReadOnly() bool   { return false }
 func (t *UpdateTicket) Description() string {
-	return "Atualiza campos de um chamado: status, urgência, título, descrição ou categoria. Passe apenas os campos que deseja alterar."
+	return `Atualiza campos de um chamado existente.
+Quando usar: quando o usuario quiser alterar status, urgencia, titulo, descricao ou categoria de um chamado. Ex: "fechar chamado 123", "mudar urgencia do chamado 456 para alta".
+SEMPRE confirme a alteracao com o usuario via respond_interactive antes de executar.
+O usuario precisa ter permissao de edicao no GLPI para o chamado.
+Passe apenas os campos que deseja alterar — campos omitidos nao serao modificados.
+Retorna: {mensagem, alteracoes: [lista de campos alterados]}.`
 }
 func (t *UpdateTicket) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
@@ -332,14 +352,16 @@ func NewSearchTicketsAdvanced(g *glpi.Client, token string) *SearchTicketsAdvanc
 	return &SearchTicketsAdvanced{glpi: g, sessionToken: token}
 }
 
-func (t *SearchTicketsAdvanced) Name() string { return "search_tickets_advanced" }
+func (t *SearchTicketsAdvanced) Name() string  { return "search_tickets_advanced" }
+func (t *SearchTicketsAdvanced) ReadOnly() bool { return true }
 func (t *SearchTicketsAdvanced) Description() string {
 	return `Busca chamados por palavra-chave, status, periodo, urgencia ou tecnico.
 Quando usar: sempre que o usuario quiser encontrar chamados por algum criterio. Ex: "chamados de VPN", "chamados abertos", "chamados do mes".
-O campo 'query' busca no titulo E descricao simultaneamente.
+NAO usar: para listar apenas "meus chamados" sem filtros — use list_my_tickets.
+O campo 'query' busca por substring no titulo E descricao simultaneamente (busca com AND entre criterios).
 Se nenhum criterio for informado, pedira esclarecimento ao usuario.
-Prefira esta ferramenta sobre list_my_tickets quando houver qualquer filtro de busca.
-Retorna: lista com id, titulo, status, datas, urgencia, categoria, tecnico e solicitante.`
+Resultados limitados a 10 itens. Se houver mais, informe o total e sugira ao usuario refinar a busca.
+Retorna: {total, chamados: [{id, titulo, status, data_abertura, data_fechamento, urgencia, prioridade, categoria, tecnico, solicitante}]}.`
 }
 func (t *SearchTicketsAdvanced) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
@@ -473,6 +495,9 @@ func (t *SearchTicketsAdvanced) Execute(_ context.Context, args map[string]any) 
 		return nil, fmt.Errorf("erro na busca: %w", err)
 	}
 
+	// GLPI search field IDs:
+	// 1=Title, 2=ID, 3=Priority, 4=Requester, 5=Technician,
+	// 7=Category, 10=Urgency, 12=Status, 15=Open date, 16=Close date, 21=Content
 	items := make([]map[string]any, len(result.Data))
 	for i, d := range result.Data {
 		items[i] = map[string]any{
@@ -503,9 +528,14 @@ func NewGetTicketTasks(g *glpi.Client, token string, userID int) *GetTicketTasks
 	return &GetTicketTasks{glpi: g, sessionToken: token, userID: userID}
 }
 
-func (t *GetTicketTasks) Name() string { return "get_ticket_tasks" }
+func (t *GetTicketTasks) Name() string  { return "get_ticket_tasks" }
+func (t *GetTicketTasks) ReadOnly() bool { return true }
 func (t *GetTicketTasks) Description() string {
-	return "Lista as tarefas/atividades de um chamado"
+	return `Lista as tarefas/atividades de um chamado.
+Quando usar: quando o usuario quiser ver as tarefas de um chamado especifico. Ex: "tarefas do chamado 123", "o que precisa ser feito no chamado 456".
+Retorna: {total, tarefas: [{id, conteudo, estado, progresso, data}]}.
+Estados possiveis: "A fazer" (1), "Em andamento" (2), "Feito" (3).
+Progresso e um percentual de 0 a 100.`
 }
 func (t *GetTicketTasks) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
@@ -553,9 +583,14 @@ func NewAddTicketTask(g *glpi.Client, token string, userID int) *AddTicketTask {
 	return &AddTicketTask{glpi: g, sessionToken: token, userID: userID}
 }
 
-func (t *AddTicketTask) Name() string { return "add_ticket_task" }
+func (t *AddTicketTask) Name() string    { return "add_ticket_task" }
+func (t *AddTicketTask) ReadOnly() bool   { return false }
 func (t *AddTicketTask) Description() string {
-	return "Cria uma tarefa em um chamado existente"
+	return `Cria uma nova tarefa em um chamado existente.
+Quando usar: quando o usuario quiser adicionar uma tarefa/atividade a um chamado. Ex: "adicionar tarefa no chamado 123", "criar atividade para verificar X".
+SEMPRE confirme o conteudo da tarefa com o usuario via respond_interactive antes de criar.
+O estado padrao e "A fazer" (1) se nao informado.
+Retorna: {id, mensagem} com o numero da tarefa criada.`
 }
 func (t *AddTicketTask) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
@@ -604,9 +639,15 @@ func NewApproveTicket(g *glpi.Client, token string) *ApproveTicket {
 	return &ApproveTicket{glpi: g, sessionToken: token}
 }
 
-func (t *ApproveTicket) Name() string { return "approve_ticket" }
+func (t *ApproveTicket) Name() string    { return "approve_ticket" }
+func (t *ApproveTicket) ReadOnly() bool   { return false }
 func (t *ApproveTicket) Description() string {
-	return "Aprova ou recusa uma validação/aprovação pendente em um chamado"
+	return `Aprova ou recusa uma validacao/aprovacao pendente em um chamado.
+Quando usar: quando o usuario quiser aprovar ou recusar uma solicitacao de validacao. Ex: "aprovar chamado 123", "recusar aprovacao do chamado 456".
+Pre-requisito: o chamado deve ter uma validacao pendente (status "Waiting"). Caso contrario, retorna erro.
+SEMPRE confirme a decisao com o usuario via respond_interactive antes de executar.
+Requer: ticket_id e approve (sim/nao). Comentario e opcional.
+Retorna: {mensagem} com confirmacao da acao realizada.`
 }
 func (t *ApproveTicket) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
@@ -671,9 +712,15 @@ func NewRateTicket(g *glpi.Client, token string) *RateTicket {
 	return &RateTicket{glpi: g, sessionToken: token}
 }
 
-func (t *RateTicket) Name() string { return "rate_ticket" }
+func (t *RateTicket) Name() string    { return "rate_ticket" }
+func (t *RateTicket) ReadOnly() bool   { return false }
 func (t *RateTicket) Description() string {
-	return "Envia avaliação de satisfação para um chamado solucionado/fechado"
+	return `Envia avaliacao de satisfacao para um chamado solucionado/fechado.
+Quando usar: quando o usuario quiser avaliar o atendimento de um chamado ja resolvido. Ex: "avaliar chamado 123", "dar nota 5 ao chamado 456".
+Requer: ticket_id e rating (1-5). Comentario e opcional.
+O chamado precisa ter uma pesquisa de satisfacao disponivel (gerada automaticamente apos solucao).
+Se ja foi avaliado, a nota sera sobrescrita pela nova avaliacao.
+Retorna: {mensagem} com confirmacao e a nota enviada.`
 }
 func (t *RateTicket) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
@@ -730,9 +777,12 @@ func NewGetTicketHistory(g *glpi.Client, token string, userID int) *GetTicketHis
 	return &GetTicketHistory{glpi: g, sessionToken: token, userID: userID}
 }
 
-func (t *GetTicketHistory) Name() string { return "get_ticket_history" }
+func (t *GetTicketHistory) Name() string  { return "get_ticket_history" }
+func (t *GetTicketHistory) ReadOnly() bool { return true }
 func (t *GetTicketHistory) Description() string {
-	return "Mostra o histórico de alterações de um chamado (quem mudou o quê e quando)"
+	return `Mostra o historico completo de alteracoes de um chamado.
+Quando usar: quando o usuario quiser saber o que aconteceu com um chamado, quem alterou, quando mudou de status. Ex: "historico do chamado 123", "o que mudou no meu chamado".
+Retorna: lista com data, usuario, valor antigo e valor novo de cada alteracao.`
 }
 func (t *GetTicketHistory) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
@@ -779,9 +829,14 @@ func NewAddFollowup(g *glpi.Client, token string, userID int) *AddFollowup {
 	return &AddFollowup{glpi: g, sessionToken: token, userID: userID}
 }
 
-func (t *AddFollowup) Name() string { return "add_followup" }
+func (t *AddFollowup) Name() string    { return "add_followup" }
+func (t *AddFollowup) ReadOnly() bool   { return false }
 func (t *AddFollowup) Description() string {
-	return "Adiciona um comentário (followup) a um chamado existente"
+	return `Adiciona um comentario (followup) a um chamado existente.
+Quando usar: quando o usuario quiser enviar uma mensagem ou atualizacao em um chamado. Ex: "comentar no chamado 123", "enviar mensagem no chamado 456".
+O comentario sera visivel para todos os envolvidos no chamado (solicitante, tecnico, observadores).
+Requer: ticket_id e content (texto do comentario).
+Retorna: {id, mensagem} com confirmacao do comentario adicionado.`
 }
 func (t *AddFollowup) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
@@ -826,9 +881,13 @@ func NewGetFollowups(g *glpi.Client, token string, userID int) *GetFollowups {
 	return &GetFollowups{glpi: g, sessionToken: token, userID: userID}
 }
 
-func (t *GetFollowups) Name() string { return "get_followups" }
+func (t *GetFollowups) Name() string  { return "get_followups" }
+func (t *GetFollowups) ReadOnly() bool { return true }
 func (t *GetFollowups) Description() string {
-	return "Lista os comentários (followups) de um chamado"
+	return `Lista os comentarios (followups) de um chamado.
+Quando usar: quando o usuario quiser ver as mensagens/respostas de um chamado. Ex: "comentarios do chamado 123", "respostas no meu chamado".
+Retorna: {total, comentarios: [{id, conteudo, data}]}.
+Nota: a resposta nao inclui o nome do autor de cada comentario.`
 }
 func (t *GetFollowups) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{

@@ -12,7 +12,8 @@ type RespondInteractive struct{}
 
 func NewRespondInteractive() *RespondInteractive { return &RespondInteractive{} }
 
-func (t *RespondInteractive) Name() string { return "respond_interactive" }
+func (t *RespondInteractive) Name() string     { return "respond_interactive" }
+func (t *RespondInteractive) ReadOnly() bool { return false }
 func (t *RespondInteractive) Description() string {
 	return `Envia mensagem interativa com botoes ou lista de opcoes clicaveis via WhatsApp.
 Quando usar: SEMPRE que houver opcoes predefinidas para o usuario escolher. Tambem use para apresentar esclarecimentos quando uma ferramenta retornar need_clarification=true.

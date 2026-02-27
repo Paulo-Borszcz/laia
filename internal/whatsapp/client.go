@@ -89,6 +89,45 @@ func (c *Client) SendList(to, body, buttonText string, sections []Section) error
 	return c.send(msg)
 }
 
+// ReactMessage sends or removes a reaction on a message.
+// Reference: https://developers.facebook.com/docs/whatsapp/cloud-api/messages/reaction-messages
+func (c *Client) ReactMessage(to, messageID, emoji string) error {
+	msg := map[string]any{
+		"messaging_product": "whatsapp",
+		"recipient_type":    "individual",
+		"to":                to,
+		"type":              "reaction",
+		"reaction": map[string]string{
+			"message_id": messageID,
+			"emoji":      emoji,
+		},
+	}
+	payload, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("marshaling reaction: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/%s/messages", apiURL, c.phoneNumberID)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.accessToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("sending reaction: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("whatsapp API reaction status %d: %s", resp.StatusCode, respBody)
+	}
+	return nil
+}
+
 func (c *Client) send(msg SendMessageRequest) error {
 	payload, err := json.Marshal(msg)
 	if err != nil {

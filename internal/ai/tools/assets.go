@@ -17,13 +17,17 @@ func NewSearchAssets(g *glpi.Client, token string) *SearchAssets {
 	return &SearchAssets{glpi: g, sessionToken: token}
 }
 
-func (t *SearchAssets) Name() string { return "search_assets" }
+func (t *SearchAssets) Name() string     { return "search_assets" }
+func (t *SearchAssets) ReadOnly() bool { return true }
 func (t *SearchAssets) Description() string {
 	return `Busca ativos de TI por nome ou numero de serie.
 Quando usar: quando o usuario perguntar sobre equipamentos, patrimonio, ativos. Ex: "meu computador", "impressora do 2o andar", "monitor serial XYZ".
+NAO usar: para chamados — use search_tickets_advanced.
 Tipos disponiveis (mapeamento PT→EN): computador→Computer, monitor→Monitor, impressora→Printer, telefone→Phone, equipamento de rede→NetworkEquipment.
-Se o tipo nao for informado, pedira esclarecimento.
-Retorna: lista com id, nome e status do ativo.`
+Se o tipo nao for informado, pedira esclarecimento via need_clarification — use respond_interactive para perguntar ao usuario.
+A busca e por substring no nome e serial (case-insensitive).
+Resultados limitados a 10 itens. Se houver mais, sugira ao usuario refinar a busca.
+Retorna: {total, ativos: [{id, nome, status}]}.`
 }
 func (t *SearchAssets) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{

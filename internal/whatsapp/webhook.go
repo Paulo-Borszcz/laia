@@ -6,8 +6,8 @@ import (
 	"net/http"
 )
 
-// MessageHandler is called for each incoming text message with (senderPhone, messageBody).
-type MessageHandler func(phone, text string)
+// MessageHandler is called for each incoming message with (senderPhone, messageID, messageBody).
+type MessageHandler func(phone, messageID, text string)
 
 type WebhookHandler struct {
 	verifyToken string
@@ -55,18 +55,18 @@ func (h *WebhookHandler) HandleIncoming(w http.ResponseWriter, r *http.Request) 
 				switch msg.Type {
 				case "text":
 					if msg.Text != nil {
-						h.onMessage(msg.From, msg.Text.Body)
+						h.onMessage(msg.From, msg.ID, msg.Text.Body)
 					}
 				case "interactive":
 					if msg.Interactive != nil {
 						switch msg.Interactive.Type {
 						case "button_reply":
 							if msg.Interactive.ButtonReply != nil {
-								h.onMessage(msg.From, msg.Interactive.ButtonReply.Title)
+								h.onMessage(msg.From, msg.ID, msg.Interactive.ButtonReply.Title)
 							}
 						case "list_reply":
 							if msg.Interactive.ListReply != nil {
-								h.onMessage(msg.From, msg.Interactive.ListReply.Title)
+								h.onMessage(msg.From, msg.ID, msg.Interactive.ListReply.Title)
 							}
 						}
 					}

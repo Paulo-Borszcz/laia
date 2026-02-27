@@ -13,6 +13,8 @@ const (
 	maxOutputLen = 8192
 	// Per-tool execution timeout
 	toolTimeout = 30 * time.Second
+	// Max items in a list before truncation
+	maxListItems = 10
 )
 
 // ParamSchema describes tool parameters using JSON Schema conventions.
@@ -31,6 +33,8 @@ type Tool interface {
 	Description() string
 	Parameters() *ParamSchema
 	Execute(ctx context.Context, args map[string]any) (map[string]any, error)
+	// ReadOnly returns true if the tool only reads data (safe for parallel execution).
+	ReadOnly() bool
 }
 
 // Registry holds all registered tools.
@@ -55,7 +59,7 @@ func (r *Registry) Get(name string) (Tool, error) {
 }
 
 // ExecuteTool validates args, applies a timeout, runs the tool, truncates output,
-// and logs execution duration. Inspired by opencode's tool execution wrapper.
+// and logs execution duration.
 func (r *Registry) ExecuteTool(ctx context.Context, name string, args map[string]any) (map[string]any, error) {
 	t, err := r.Get(name)
 	if err != nil {
@@ -65,7 +69,10 @@ func (r *Registry) ExecuteTool(ctx context.Context, name string, args map[string
 	// Validate required parameters before execution
 	if schema := t.Parameters(); schema != nil {
 		if err := validateArgs(schema, args); err != nil {
-			return nil, fmt.Errorf("argumentos inválidos para %s: %w", name, err)
+			return nil, &ToolError{
+				Type:    ErrValidation,
+				Message: fmt.Sprintf("argumentos inválidos para %s: %v", name, err),
+			}
 		}
 	}
 
@@ -85,6 +92,15 @@ func (r *Registry) ExecuteTool(ctx context.Context, name string, args map[string
 
 	// Truncate large outputs to save tokens
 	return truncateOutput(result), nil
+}
+
+// IsReadOnly checks if a tool is safe for parallel execution.
+func (r *Registry) IsReadOnly(name string) bool {
+	t, err := r.Get(name)
+	if err != nil {
+		return false
+	}
+	return t.ReadOnly()
 }
 
 // validateArgs checks that all required parameters are present and have correct types.
@@ -136,27 +152,40 @@ func validateArgs(schema *ParamSchema, args map[string]any) error {
 	return nil
 }
 
-// truncateOutput serializes the result and truncates if it exceeds maxOutputLen.
+// truncateOutput detects large list fields and truncates them, then checks total size.
 func truncateOutput(result map[string]any) map[string]any {
+	// First pass: truncate known list fields to maxListItems
+	for key, val := range result {
+		if items, ok := val.([]map[string]any); ok && len(items) > maxListItems {
+			originalCount := len(items)
+			truncated := make([]map[string]any, maxListItems)
+			for i := range maxListItems {
+				// Copy item, strip verbose fields to save tokens
+				item := make(map[string]any, len(items[i]))
+				for k, v := range items[i] {
+					if k == "descricao" || k == "conteudo" || k == "preview" {
+						continue
+					}
+					item[k] = v
+				}
+				truncated[i] = item
+			}
+			result[key] = truncated
+			result["_truncated"] = true
+			result["_truncated_field"] = key
+			result["_original_count"] = originalCount
+			result["_nota"] = fmt.Sprintf("Mostrando %d de %d resultados. Sugira ao usuário refinar a busca.", maxListItems, originalCount)
+			return result
+		}
+	}
+
+	// Second pass: check total size
 	data, err := json.Marshal(result)
 	if err != nil || len(data) <= maxOutputLen {
 		return result
 	}
 
 	log.Printf("tool: output truncated from %d to %d bytes", len(data), maxOutputLen)
-
-	// Re-parse the truncated JSON is fragile; instead, trim list-type fields
-	for key, val := range result {
-		if items, ok := val.([]map[string]any); ok && len(items) > 10 {
-			result[key] = items[:10]
-			result["_truncated"] = true
-			result["_truncated_field"] = key
-			result["_original_count"] = len(items)
-			return result
-		}
-	}
-
-	// Fallback: return a summary indicating truncation
 	return map[string]any{
 		"_truncated": true,
 		"_summary":   string(data[:maxOutputLen]),

@@ -4,36 +4,46 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/lojasmm/laia/internal/ai"
+	"github.com/lojasmm/laia/internal/session"
 	"github.com/lojasmm/laia/internal/store"
 	"github.com/lojasmm/laia/internal/whatsapp"
 )
 
 type Handler struct {
-	wa      *whatsapp.Client
-	store   store.Store
-	authURL string
-	agent   *ai.Agent
+	wa         *whatsapp.Client
+	store      store.Store
+	authURL    string
+	agent      *ai.Agent
+	sessionMgr *session.Manager
 }
 
-func NewHandler(wa *whatsapp.Client, s store.Store, authURL string, agent *ai.Agent) *Handler {
-	return &Handler{wa: wa, store: s, authURL: authURL, agent: agent}
+func NewHandler(wa *whatsapp.Client, s store.Store, authURL string, agent *ai.Agent, sm *session.Manager) *Handler {
+	return &Handler{wa: wa, store: s, authURL: authURL, agent: agent, sessionMgr: sm}
 }
 
-func (h *Handler) HandleMessage(phone, text string) {
-	user, err := h.store.GetUser(phone)
+func (h *Handler) HandleMessage(phone, messageID, text string) {
+	// Per-user lock prevents race conditions from concurrent messages
+	err := h.sessionMgr.WithLock(phone, func() error {
+		user, err := h.store.GetUser(phone)
+		if err != nil {
+			log.Printf("bot: store error for %s: %v", phone, err)
+			return nil
+		}
+
+		if user == nil {
+			h.sendVerificationLink(phone)
+			return nil
+		}
+
+		h.handleCommand(user, phone, messageID, text)
+		return nil
+	})
 	if err != nil {
-		log.Printf("bot: store error for %s: %v", phone, err)
-		return
+		log.Printf("bot: session lock error for %s: %v", phone, err)
 	}
-
-	if user == nil {
-		h.sendVerificationLink(phone)
-		return
-	}
-
-	h.handleCommand(user, phone, text)
 }
 
 func (h *Handler) sendVerificationLink(phone string) {
@@ -51,12 +61,39 @@ func (h *Handler) sendVerificationLink(phone string) {
 	}
 }
 
-func (h *Handler) handleCommand(user *store.User, phone, text string) {
+func (h *Handler) handleCommand(user *store.User, phone, messageID, text string) {
+	// Hourglass reaction: signal to user that we're processing
+	if messageID != "" {
+		if err := h.wa.ReactMessage(phone, messageID, "⏳"); err != nil {
+			log.Printf("bot: failed to send hourglass reaction: %v", err)
+		}
+	}
+
 	ctx := context.Background()
 	resp, err := h.agent.Handle(ctx, user, phone, text)
+
+	// Remove hourglass reaction after processing
+	if messageID != "" {
+		// Empty emoji removes the reaction
+		h.wa.ReactMessage(phone, messageID, "")
+	}
+
 	if err != nil {
 		log.Printf("bot: agent error for %s: %v", phone, err)
-		h.wa.SendText(phone, "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente mais tarde.")
+		errMsg := err.Error()
+		switch {
+		case strings.Contains(errMsg, "auth_error"):
+			h.wa.SendText(phone, "Sua sessão com o Nexus expirou. Vou enviar um novo link para reconectar sua conta.")
+			h.store.DeleteUser(phone)
+			h.sendVerificationLink(phone)
+		case strings.Contains(errMsg, "initSession"):
+			h.wa.SendText(phone, "O Nexus pode estar em manutenção no momento. Tente novamente em alguns minutos.")
+		case strings.Contains(errMsg, "context"):
+			h.store.ClearHistory(phone)
+			h.wa.SendText(phone, "Nossa conversa ficou muito longa. Comece uma nova pergunta, por favor.")
+		default:
+			h.wa.SendText(phone, "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente mais tarde.")
+		}
 		return
 	}
 

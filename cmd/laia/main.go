@@ -17,6 +17,7 @@ import (
 	"github.com/lojasmm/laia/internal/bot"
 	"github.com/lojasmm/laia/internal/config"
 	"github.com/lojasmm/laia/internal/glpi"
+	"github.com/lojasmm/laia/internal/session"
 	"github.com/lojasmm/laia/internal/store"
 	"github.com/lojasmm/laia/internal/whatsapp"
 )
@@ -37,8 +38,18 @@ func main() {
 	waClient := whatsapp.NewClient(cfg.WAPhoneNumberID, cfg.WAAccessToken)
 
 	agent := ai.NewAgent(cfg.OpenAIAPIKey, glpiClient, db, aitools.BuildRegistry)
+	sessionMgr := session.NewManager()
 
-	botHandler := bot.NewHandler(waClient, db, cfg.BaseURL, agent)
+	// Periodic cleanup of stale per-user locks to prevent memory leaks
+	go func() {
+		ticker := time.NewTicker(30 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			sessionMgr.Cleanup(1 * time.Hour)
+		}
+	}()
+
+	botHandler := bot.NewHandler(waClient, db, cfg.BaseURL, agent, sessionMgr)
 	authHandler := auth.NewHandler(glpiClient, db, waClient)
 	webhookHandler := whatsapp.NewWebhookHandler(cfg.WAVerifyToken, botHandler.HandleMessage)
 

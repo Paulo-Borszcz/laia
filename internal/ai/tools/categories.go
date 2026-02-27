@@ -20,7 +20,8 @@ func NewGetDepartments(g *glpi.Client, token string) *GetDepartments {
 	return &GetDepartments{glpi: g, sessionToken: token}
 }
 
-func (t *GetDepartments) Name() string { return "get_departments" }
+func (t *GetDepartments) Name() string     { return "get_departments" }
+func (t *GetDepartments) ReadOnly() bool { return true }
 func (t *GetDepartments) Description() string {
 	return `Lista os departamentos/setores disponiveis para abertura de chamados.
 Quando usar: no fluxo de criacao de chamado (Etapa 2) para determinar o setor correto.
@@ -59,12 +60,15 @@ func NewGetDepartmentCategories(g *glpi.Client, token string) *GetDepartmentCate
 	return &GetDepartmentCategories{glpi: g, sessionToken: token}
 }
 
-func (t *GetDepartmentCategories) Name() string { return "get_department_categories" }
+func (t *GetDepartmentCategories) Name() string     { return "get_department_categories" }
+func (t *GetDepartmentCategories) ReadOnly() bool { return true }
 func (t *GetDepartmentCategories) Description() string {
 	return `Lista as categorias ITIL disponiveis para um departamento/formulario.
 Quando usar: no fluxo de criacao de chamado (Etapa 3) apos determinar o departamento.
 NAO mostre a lista completa ao usuario — analise e use respond_interactive com opcoes filtradas.
-Retorna: lista com id e nome de cada categoria.`
+O campo 'id' (category_id) e o que deve ser passado para create_ticket.
+Se retornar total=0, o departamento pode nao ter categorias configuradas — informe o campo 'erro'.
+Retorna: {total, categorias: [{id, nome}]}.`
 }
 func (t *GetDepartmentCategories) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
@@ -155,11 +159,13 @@ func NewGetSubCategories(g *glpi.Client) *GetSubCategories {
 	return &GetSubCategories{glpi: g}
 }
 
-func (t *GetSubCategories) Name() string { return "get_subcategories" }
+func (t *GetSubCategories) Name() string     { return "get_subcategories" }
+func (t *GetSubCategories) ReadOnly() bool { return true }
 func (t *GetSubCategories) Description() string {
 	return `Lista as sub-categorias de uma categoria ITIL.
 Quando usar: no fluxo de criacao de chamado (Etapa 3) quando uma categoria tem sub-niveis.
-Retorna: lista com id e nome de cada sub-categoria.`
+Se retornar total=0, a categoria nao possui sub-categorias — use o ID da propria categoria no create_ticket.
+Retorna: {total, categorias: [{id, nome}]}.`
 }
 func (t *GetSubCategories) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
