@@ -184,20 +184,21 @@ func applyFormActors(g *glpi.Client, session string, formID, requesterID int, in
 		if a.ActorValue == 0 && a.ActorType == 1 {
 			continue // Creator = requester, already set
 		}
+		// FormCreator roles: 1=Requester, 2=Observer, 3=Assigned
 		switch a.ActorRole {
-		case 2: // Assigned
-			switch a.ActorType {
-			case 3: // Specific user
-				input.UsersIDAssign = append(input.UsersIDAssign, a.ActorValue)
-			case 5: // Specific group
-				input.GroupsIDAssign = append(input.GroupsIDAssign, a.ActorValue)
-			}
-		case 3: // Observer
+		case 2: // Observer
 			switch a.ActorType {
 			case 3: // Specific user
 				input.UsersIDObserver = append(input.UsersIDObserver, a.ActorValue)
 			case 5: // Specific group
 				input.GroupsIDObserver = append(input.GroupsIDObserver, a.ActorValue)
+			}
+		case 3: // Assigned
+			switch a.ActorType {
+			case 3: // Specific user
+				input.UsersIDAssign = append(input.UsersIDAssign, a.ActorValue)
+			case 5: // Specific group
+				input.GroupsIDAssign = append(input.GroupsIDAssign, a.ActorValue)
 			}
 		}
 	}
