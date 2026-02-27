@@ -643,6 +643,273 @@ func (c *Client) GetTargetActors(sessionToken string, targetID int) ([]TargetAct
 	return actors, nil
 }
 
+// GetTicketTasks returns tasks for a ticket.
+// Reference: GET /apirest.php/Ticket/:id/TicketTask
+func (c *Client) GetTicketTasks(sessionToken string, ticketID int) ([]TicketTask, error) {
+	url := fmt.Sprintf("%s/apirest.php/Ticket/%d/TicketTask", c.baseURL, ticketID)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setSessionHeaders(req, sessionToken)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getTicketTasks request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("getTicketTasks status %d: %s", resp.StatusCode, body)
+	}
+
+	var tasks []TicketTask
+	if err := json.NewDecoder(resp.Body).Decode(&tasks); err != nil {
+		return nil, fmt.Errorf("decoding ticket tasks: %w", err)
+	}
+	return tasks, nil
+}
+
+// AddTicketTask creates a task on a ticket.
+// Reference: POST /apirest.php/TicketTask/
+func (c *Client) AddTicketTask(sessionToken string, ticketID int, content string, state int) (int, error) {
+	input := map[string]any{
+		"tickets_id": ticketID,
+		"content":    content,
+		"state":      state,
+	}
+	body, err := json.Marshal(glpiInput[map[string]any]{Input: input})
+	if err != nil {
+		return 0, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/apirest.php/TicketTask/", bytes.NewReader(body))
+	if err != nil {
+		return 0, err
+	}
+	c.setWriteSessionHeaders(req, sessionToken)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("addTicketTask request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		respBody, _ := io.ReadAll(resp.Body)
+		return 0, fmt.Errorf("addTicketTask status %d: %s", resp.StatusCode, respBody)
+	}
+
+	var result struct {
+		ID int `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return 0, fmt.Errorf("decoding addTicketTask response: %w", err)
+	}
+	return result.ID, nil
+}
+
+// GetTicketValidations returns approval requests for a ticket.
+// Reference: GET /apirest.php/Ticket/:id/TicketValidation
+func (c *Client) GetTicketValidations(sessionToken string, ticketID int) ([]TicketValidation, error) {
+	url := fmt.Sprintf("%s/apirest.php/Ticket/%d/TicketValidation", c.baseURL, ticketID)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setSessionHeaders(req, sessionToken)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getTicketValidations request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("getTicketValidations status %d: %s", resp.StatusCode, body)
+	}
+
+	var validations []TicketValidation
+	if err := json.NewDecoder(resp.Body).Decode(&validations); err != nil {
+		return nil, fmt.Errorf("decoding ticket validations: %w", err)
+	}
+	return validations, nil
+}
+
+// RespondTicketValidation approves or refuses a validation request.
+// Reference: PUT /apirest.php/TicketValidation/:id
+func (c *Client) RespondTicketValidation(sessionToken string, validationID int, approve bool, comment string) error {
+	status := 3 // Refused
+	if approve {
+		status = 2 // Approved
+	}
+	input := map[string]any{
+		"status":             status,
+		"comment_validation": comment,
+	}
+	body, err := json.Marshal(glpiInput[map[string]any]{Input: input})
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/apirest.php/TicketValidation/%d", c.baseURL, validationID)
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	c.setWriteSessionHeaders(req, sessionToken)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("respondTicketValidation request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("respondTicketValidation status %d: %s", resp.StatusCode, respBody)
+	}
+	return nil
+}
+
+// GetTicketSatisfaction returns the satisfaction survey for a ticket.
+// Reference: GET /apirest.php/Ticket/:id/TicketSatisfaction
+func (c *Client) GetTicketSatisfaction(sessionToken string, ticketID int) (*TicketSatisfaction, error) {
+	url := fmt.Sprintf("%s/apirest.php/Ticket/%d/TicketSatisfaction", c.baseURL, ticketID)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setSessionHeaders(req, sessionToken)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getTicketSatisfaction request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("getTicketSatisfaction status %d: %s", resp.StatusCode, body)
+	}
+
+	var surveys []TicketSatisfaction
+	if err := json.NewDecoder(resp.Body).Decode(&surveys); err != nil {
+		return nil, fmt.Errorf("decoding ticket satisfaction: %w", err)
+	}
+	if len(surveys) == 0 {
+		return nil, nil
+	}
+	return &surveys[0], nil
+}
+
+// RateTicketSatisfaction submits a satisfaction rating for a ticket.
+// Reference: PUT /apirest.php/TicketSatisfaction/:id
+func (c *Client) RateTicketSatisfaction(sessionToken string, satisfactionID int, rating int, comment string) error {
+	input := map[string]any{
+		"satisfaction": rating,
+		"comment":      comment,
+	}
+	body, err := json.Marshal(glpiInput[map[string]any]{Input: input})
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/apirest.php/TicketSatisfaction/%d", c.baseURL, satisfactionID)
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	c.setWriteSessionHeaders(req, sessionToken)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("rateTicketSatisfaction request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("rateTicketSatisfaction status %d: %s", resp.StatusCode, respBody)
+	}
+	return nil
+}
+
+// GetTicketLogs returns the change history for a ticket.
+// Reference: GET /apirest.php/Ticket/:id/Log
+func (c *Client) GetTicketLogs(sessionToken string, ticketID int) ([]LogEntry, error) {
+	url := fmt.Sprintf("%s/apirest.php/Ticket/%d/Log?range=0-24", c.baseURL, ticketID)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setSessionHeaders(req, sessionToken)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getTicketLogs request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("getTicketLogs status %d: %s", resp.StatusCode, body)
+	}
+
+	var logs []LogEntry
+	if err := json.NewDecoder(resp.Body).Decode(&logs); err != nil {
+		return nil, fmt.Errorf("decoding ticket logs: %w", err)
+	}
+	return logs, nil
+}
+
+// AdvancedSearchTickets searches tickets with multiple criteria.
+// Reference: GET /apirest.php/search/Ticket/
+func (c *Client) AdvancedSearchTickets(sessionToken string, criteria map[string]string) (*SearchResponse, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/apirest.php/search/Ticket/", nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setSessionHeaders(req, sessionToken)
+
+	q := req.URL.Query()
+	for k, v := range criteria {
+		q.Set(k, v)
+	}
+	// Always show useful fields: ID, Name, Status, Date, Urgency, Priority, Category, Assigned
+	q.Set("forcedisplay[0]", "2")  // ID
+	q.Set("forcedisplay[1]", "1")  // Name
+	q.Set("forcedisplay[2]", "12") // Status
+	q.Set("forcedisplay[3]", "15") // Date
+	q.Set("forcedisplay[4]", "10") // Urgency
+	q.Set("forcedisplay[5]", "3")  // Priority
+	q.Set("forcedisplay[6]", "7")  // Category
+	q.Set("forcedisplay[7]", "5")  // Assigned
+	if _, ok := criteria["range"]; !ok {
+		q.Set("range", "0-19")
+	}
+	req.URL.RawQuery = q.Encode()
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("advancedSearchTickets request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("advancedSearchTickets status %d: %s", resp.StatusCode, body)
+	}
+
+	var result SearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decoding advanced search results: %w", err)
+	}
+	return &result, nil
+}
+
 // GetCategories returns ITIL ticket categories filtered by parent.
 // parentID=0 returns root categories (departments), parentID>0 returns sub-categories.
 // Uses the list endpoint with searchText filter on itilcategories_id.

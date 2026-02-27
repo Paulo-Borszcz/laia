@@ -75,7 +75,50 @@ type TargetActor struct {
 }
 
 type UpdateTicketInput struct {
-	Status int `json:"status,omitempty"`
+	Name             string `json:"name,omitempty"`
+	Content          string `json:"content,omitempty"`
+	Status           int    `json:"status,omitempty"`
+	Urgency          int    `json:"urgency,omitempty"`
+	Priority         int    `json:"priority,omitempty"`
+	ITILCategoriesID int    `json:"itilcategories_id,omitempty"`
+	Type             int    `json:"type,omitempty"`
+}
+
+type TicketTask struct {
+	ID          int    `json:"id"`
+	Content     string `json:"content"`
+	State       int    `json:"state"`
+	UsersID     int    `json:"users_id"`
+	DateCreated string `json:"date"`
+	Actiontime  int    `json:"actiontime"`
+	PercentDone int    `json:"percent_done"`
+}
+
+type TicketValidation struct {
+	ID                int    `json:"id"`
+	UsersIDValidate   int    `json:"users_id_validate"`
+	Status            int    `json:"status"`
+	CommentSubmission string `json:"comment_submission"`
+	CommentValidation string `json:"comment_validation"`
+	DateCreated       string `json:"submission_date"`
+}
+
+type TicketSatisfaction struct {
+	ID           int    `json:"id"`
+	TicketsID    int    `json:"tickets_id"`
+	Satisfaction int    `json:"satisfaction"`
+	Comment      string `json:"comment"`
+	DateAnswered string `json:"date_answered"`
+	DateCreated  string `json:"date_begin"`
+}
+
+type LogEntry struct {
+	ID          int    `json:"id"`
+	DateMod     string `json:"date_mod"`
+	UsersName   string `json:"user_name"`
+	LinkedField string `json:"id_search_option"`
+	OldValue    string `json:"old_value"`
+	NewValue    string `json:"new_value"`
 }
 
 // SearchResponse is the envelope returned by GET /search/:itemtype/

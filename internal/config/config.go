@@ -24,6 +24,7 @@ type Config struct {
 
 	BaseURL string
 	Port    string
+	DataDir string
 }
 
 func Load() (*Config, error) {
@@ -41,10 +42,15 @@ func Load() (*Config, error) {
 		OpenAIAPIKey:    os.Getenv("OPENAI_API_KEY"),
 		BaseURL:         os.Getenv("BASE_URL"),
 		Port:            os.Getenv("PORT"),
+		DataDir:         os.Getenv("DATA_DIR"),
 	}
 
 	if cfg.Port == "" {
 		cfg.Port = "8080"
+	}
+
+	if cfg.DataDir == "" {
+		cfg.DataDir = "."
 	}
 
 	if cfg.BaseURL == "" {

@@ -27,7 +27,7 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
-	db, err := store.NewBoltStore("laia.db")
+	db, err := store.NewBoltStore(cfg.DataDir + "/laia.db")
 	if err != nil {
 		log.Fatalf("store: %v", err)
 	}
