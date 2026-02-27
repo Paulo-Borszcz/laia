@@ -38,7 +38,7 @@ FERRAMENTAS DE CHAMADOS:
 - update_ticket(ticket_id, ...): atualiza campos (status, urgência, título, descrição, categoria)
 - add_followup(ticket_id, content): adiciona comentário
 - get_followups(ticket_id): lista comentários
-- search_tickets_advanced(status, text, urgency): busca com filtros
+- search_tickets_advanced: busca avançada com filtros combináveis (status, título, conteúdo, urgência, técnico, solicitante, observador, data abertura, data fechamento)
 - get_ticket_tasks(ticket_id): lista tarefas do chamado
 - add_ticket_task(ticket_id, content, state): cria tarefa
 - approve_ticket(ticket_id, approve, comment): aprova/recusa validação

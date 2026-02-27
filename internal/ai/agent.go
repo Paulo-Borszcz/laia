@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -145,10 +146,25 @@ func (a *Agent) Handle(ctx context.Context, user *store.User, phone, text string
 	// Doom loop detection: track consecutive identical tool calls
 	var lastToolSig string
 	var sameToolCount int
+	var historyCleared bool
 
 	for range maxToolIterations {
 		resp, err := a.chatCompletion(ctx, messages, toolsAny)
 		if err != nil {
+			// Auto-recover from corrupted history (OpenAI rejects malformed message sequences)
+			if !historyCleared && strings.Contains(err.Error(), "status 400") {
+				log.Printf("agent: corrupted history for %s, clearing and retrying", phone)
+				a.store.ClearHistory(phone)
+				historyCleared = true
+				messages = []chatMessage{
+					{Role: "system", Content: BuildSystemPrompt(user.Name, user.GLPIUserID)},
+					{Role: "user", Content: text},
+				}
+				allTurns = []store.ConversationTurn{
+					{Role: "user", Parts: []store.TurnPart{{Text: text}}},
+				}
+				continue
+			}
 			return nil, fmt.Errorf("chatCompletion: %w", err)
 		}
 
@@ -406,9 +422,15 @@ func toOpenAIMessages(turns []store.ConversationTurn) []chatMessage {
 		}
 	}
 
+	// Skip leading tool turns left over from history trimming
+	start := 0
+	for start < len(turns) && turns[start].Role == "tool" {
+		start++
+	}
+
 	var messages []chatMessage
-	for i, t := range turns {
-		turnsFromEnd := len(turns) - i
+	for i, t := range turns[start:] {
+		turnsFromEnd := len(turns) - start - i
 
 		switch t.Role {
 		case "user":

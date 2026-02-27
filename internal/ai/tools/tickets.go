@@ -292,15 +292,23 @@ func NewSearchTicketsAdvanced(g *glpi.Client, token string) *SearchTicketsAdvanc
 
 func (t *SearchTicketsAdvanced) Name() string { return "search_tickets_advanced" }
 func (t *SearchTicketsAdvanced) Description() string {
-	return "Busca chamados com filtros avançados por status, urgência, texto e data. Mais flexível que list_my_tickets."
+	return "Busca chamados com filtros avançados. Combine qualquer conjunto de filtros: status, texto, urgência, técnico, solicitante, observador, datas."
 }
 func (t *SearchTicketsAdvanced) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
 		Type: "object",
 		Properties: map[string]*ai.ParamSchema{
-			"status": {Type: "integer", Description: "Filtrar por status: 1=Novo, 2=Atribuído, 3=Planejado, 4=Pendente, 5=Solucionado, 6=Fechado. Omitir = todos."},
-			"text":   {Type: "string", Description: "Buscar no título do chamado (contém)"},
-			"urgency": {Type: "integer", Description: "Filtrar por urgência: 1-5"},
+			"status":          {Type: "integer", Description: "Filtrar por status: 1=Novo, 2=Atribuído, 3=Planejado, 4=Pendente, 5=Solucionado, 6=Fechado"},
+			"text":            {Type: "string", Description: "Buscar no título do chamado (contém)"},
+			"content":         {Type: "string", Description: "Buscar no conteúdo/descrição do chamado (contém)"},
+			"urgency":         {Type: "integer", Description: "Filtrar por urgência: 1-5"},
+			"assigned_to":     {Type: "string", Description: "Nome do técnico atribuído (contém)"},
+			"requester":       {Type: "string", Description: "Nome do solicitante (contém)"},
+			"observer":        {Type: "string", Description: "Nome do observador (contém)"},
+			"date_from":       {Type: "string", Description: "Data de abertura a partir de (formato: YYYY-MM-DD)"},
+			"date_to":         {Type: "string", Description: "Data de abertura até (formato: YYYY-MM-DD)"},
+			"close_date_from": {Type: "string", Description: "Data de fechamento a partir de (formato: YYYY-MM-DD)"},
+			"close_date_to":   {Type: "string", Description: "Data de fechamento até (formato: YYYY-MM-DD)"},
 		},
 	}
 }
@@ -309,29 +317,48 @@ func (t *SearchTicketsAdvanced) Execute(_ context.Context, args map[string]any) 
 	criteria := map[string]string{}
 	idx := 0
 
-	if text, _ := args["text"].(string); text != "" {
-		criteria[fmt.Sprintf("criteria[%d][field]", idx)] = "1"
-		criteria[fmt.Sprintf("criteria[%d][searchtype]", idx)] = "contains"
-		criteria[fmt.Sprintf("criteria[%d][value]", idx)] = text
+	addCriteria := func(field, searchType, value string) {
+		if idx > 0 {
+			criteria[fmt.Sprintf("criteria[%d][link]", idx)] = "AND"
+		}
+		criteria[fmt.Sprintf("criteria[%d][field]", idx)] = field
+		criteria[fmt.Sprintf("criteria[%d][searchtype]", idx)] = searchType
+		criteria[fmt.Sprintf("criteria[%d][value]", idx)] = value
 		idx++
+	}
+
+	if text, _ := args["text"].(string); text != "" {
+		addCriteria("1", "contains", text) // Title
+	}
+	if content, _ := args["content"].(string); content != "" {
+		addCriteria("21", "contains", content) // Description body
 	}
 	if status, err := intArg(args, "status"); err == nil {
-		if idx > 0 {
-			criteria[fmt.Sprintf("criteria[%d][link]", idx)] = "AND"
-		}
-		criteria[fmt.Sprintf("criteria[%d][field]", idx)] = "12"
-		criteria[fmt.Sprintf("criteria[%d][searchtype]", idx)] = "equals"
-		criteria[fmt.Sprintf("criteria[%d][value]", idx)] = fmt.Sprintf("%d", status)
-		idx++
+		addCriteria("12", "equals", fmt.Sprintf("%d", status))
 	}
 	if urgency, err := intArg(args, "urgency"); err == nil {
-		if idx > 0 {
-			criteria[fmt.Sprintf("criteria[%d][link]", idx)] = "AND"
-		}
-		criteria[fmt.Sprintf("criteria[%d][field]", idx)] = "10"
-		criteria[fmt.Sprintf("criteria[%d][searchtype]", idx)] = "equals"
-		criteria[fmt.Sprintf("criteria[%d][value]", idx)] = fmt.Sprintf("%d", urgency)
-		idx++
+		addCriteria("10", "equals", fmt.Sprintf("%d", urgency))
+	}
+	if v, _ := args["assigned_to"].(string); v != "" {
+		addCriteria("5", "contains", v) // Assigned technician
+	}
+	if v, _ := args["requester"].(string); v != "" {
+		addCriteria("4", "contains", v) // Requester
+	}
+	if v, _ := args["observer"].(string); v != "" {
+		addCriteria("66", "contains", v) // Observer
+	}
+	if v, _ := args["date_from"].(string); v != "" {
+		addCriteria("15", "morethan", v) // Opening date >=
+	}
+	if v, _ := args["date_to"].(string); v != "" {
+		addCriteria("15", "lessthan", v) // Opening date <=
+	}
+	if v, _ := args["close_date_from"].(string); v != "" {
+		addCriteria("16", "morethan", v) // Closing date >=
+	}
+	if v, _ := args["close_date_to"].(string); v != "" {
+		addCriteria("16", "lessthan", v) // Closing date <=
 	}
 
 	result, err := t.glpi.AdvancedSearchTickets(t.sessionToken, criteria)
@@ -342,13 +369,16 @@ func (t *SearchTicketsAdvanced) Execute(_ context.Context, args map[string]any) 
 	items := make([]map[string]any, len(result.Data))
 	for i, d := range result.Data {
 		items[i] = map[string]any{
-			"id":        d["2"],
-			"titulo":    d["1"],
-			"status":    d["12"],
-			"data":      d["15"],
-			"urgencia":  d["10"],
-			"prioridade": d["3"],
-			"categoria": d["7"],
+			"id":              d["2"],
+			"titulo":          d["1"],
+			"status":          d["12"],
+			"data_abertura":   d["15"],
+			"data_fechamento": d["16"],
+			"urgencia":        d["10"],
+			"prioridade":      d["3"],
+			"categoria":       d["7"],
+			"tecnico":         d["5"],
+			"solicitante":     d["4"],
 		}
 	}
 	return map[string]any{"total": result.TotalCount, "chamados": items}, nil

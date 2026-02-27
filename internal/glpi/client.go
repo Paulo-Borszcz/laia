@@ -878,15 +878,17 @@ func (c *Client) AdvancedSearchTickets(sessionToken string, criteria map[string]
 	for k, v := range criteria {
 		q.Set(k, v)
 	}
-	// Always show useful fields: ID, Name, Status, Date, Urgency, Priority, Category, Assigned
+	// Always show useful fields
 	q.Set("forcedisplay[0]", "2")  // ID
 	q.Set("forcedisplay[1]", "1")  // Name
 	q.Set("forcedisplay[2]", "12") // Status
-	q.Set("forcedisplay[3]", "15") // Date
+	q.Set("forcedisplay[3]", "15") // Opening date
 	q.Set("forcedisplay[4]", "10") // Urgency
 	q.Set("forcedisplay[5]", "3")  // Priority
 	q.Set("forcedisplay[6]", "7")  // Category
-	q.Set("forcedisplay[7]", "5")  // Assigned
+	q.Set("forcedisplay[7]", "5")  // Assigned technician
+	q.Set("forcedisplay[8]", "4")  // Requester
+	q.Set("forcedisplay[9]", "16") // Closing date
 	if _, ok := criteria["range"]; !ok {
 		q.Set("range", "0-19")
 	}

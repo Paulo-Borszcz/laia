@@ -133,6 +133,11 @@ func (s *BoltStore) SaveHistory(phone string, turns []ConversationTurn) error {
 	if len(turns) > maxConversationTurns {
 		turns = turns[len(turns)-maxConversationTurns:]
 	}
+	// Trimming may leave orphaned tool turns at the start (their matching
+	// assistant with tool_calls was cut). Drop them to avoid OpenAI 400 errors.
+	for len(turns) > 0 && turns[0].Role == "tool" {
+		turns = turns[1:]
+	}
 	return s.db.Update(func(tx *bolt.Tx) error {
 		data, err := json.Marshal(turns)
 		if err != nil {
