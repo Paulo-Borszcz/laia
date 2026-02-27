@@ -11,12 +11,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/lojasmm/laia/internal/ai"
+	aitools "github.com/lojasmm/laia/internal/ai/tools"
 	"github.com/lojasmm/laia/internal/auth"
 	"github.com/lojasmm/laia/internal/bot"
 	"github.com/lojasmm/laia/internal/config"
 	"github.com/lojasmm/laia/internal/glpi"
 	"github.com/lojasmm/laia/internal/store"
 	"github.com/lojasmm/laia/internal/whatsapp"
+	"google.golang.org/genai"
 )
 
 func main() {
@@ -34,7 +37,18 @@ func main() {
 	glpiClient := glpi.NewClient(cfg.NexusBaseURL, cfg.NexusAppToken)
 	waClient := whatsapp.NewClient(cfg.WAPhoneNumberID, cfg.WAAccessToken)
 
-	botHandler := bot.NewHandler(waClient, glpiClient, db, cfg.BaseURL)
+	ctx := context.Background()
+	geminiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:  cfg.GeminiAPIKey,
+		Backend: genai.BackendGeminiAPI,
+	})
+	if err != nil {
+		log.Fatalf("gemini: %v", err)
+	}
+
+	agent := ai.NewAgent(geminiClient, glpiClient, db, aitools.BuildRegistry)
+
+	botHandler := bot.NewHandler(waClient, db, cfg.BaseURL, agent)
 	authHandler := auth.NewHandler(glpiClient, db)
 	webhookHandler := whatsapp.NewWebhookHandler(cfg.WAVerifyToken, botHandler.HandleMessage)
 
@@ -74,9 +88,9 @@ func main() {
 	<-quit
 	log.Println("laia: shutting down...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("shutdown: %v", err)
 	}
 	log.Println("laia: stopped")

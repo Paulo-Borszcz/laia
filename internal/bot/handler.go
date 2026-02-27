@@ -1,24 +1,24 @@
 package bot
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"strings"
 
-	"github.com/lojasmm/laia/internal/glpi"
+	"github.com/lojasmm/laia/internal/ai"
 	"github.com/lojasmm/laia/internal/store"
 	"github.com/lojasmm/laia/internal/whatsapp"
 )
 
 type Handler struct {
 	wa      *whatsapp.Client
-	glpi    *glpi.Client
 	store   store.Store
 	authURL string
+	agent   *ai.Agent
 }
 
-func NewHandler(wa *whatsapp.Client, g *glpi.Client, s store.Store, authURL string) *Handler {
-	return &Handler{wa: wa, glpi: g, store: s, authURL: authURL}
+func NewHandler(wa *whatsapp.Client, s store.Store, authURL string, agent *ai.Agent) *Handler {
+	return &Handler{wa: wa, store: s, authURL: authURL, agent: agent}
 }
 
 func (h *Handler) HandleMessage(phone, text string) {
@@ -48,75 +48,15 @@ func (h *Handler) sendVerificationLink(phone string) {
 }
 
 func (h *Handler) handleCommand(user *store.User, phone, text string) {
-	cmd := strings.TrimSpace(strings.ToLower(text))
-
-	switch {
-	case cmd == "meus chamados" || cmd == "chamados":
-		h.listTickets(user, phone)
-	default:
-		h.sendHelp(user, phone)
-	}
-}
-
-func (h *Handler) listTickets(user *store.User, phone string) {
-	sessionToken, err := h.glpi.InitSession(user.UserToken)
+	ctx := context.Background()
+	reply, err := h.agent.Handle(ctx, user, phone, text)
 	if err != nil {
-		log.Printf("bot: initSession failed for user %s: %v", user.Name, err)
-		h.wa.SendText(phone, "Erro ao conectar ao Nexus. Tente novamente mais tarde.")
-		return
-	}
-	defer h.glpi.KillSession(sessionToken)
-
-	tickets, err := h.glpi.GetMyTickets(sessionToken)
-	if err != nil {
-		log.Printf("bot: getMyTickets failed for user %s: %v", user.Name, err)
-		h.wa.SendText(phone, "Erro ao buscar seus chamados.")
+		log.Printf("bot: agent error for %s: %v", phone, err)
+		h.wa.SendText(phone, "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente mais tarde.")
 		return
 	}
 
-	if len(tickets) == 0 {
-		h.wa.SendText(phone, "Você não tem chamados abertos no momento.")
-		return
-	}
-
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("*Seus chamados (%d):*\n\n", len(tickets)))
-	for _, t := range tickets {
-		sb.WriteString(fmt.Sprintf("• #%d — %s\n  Status: %s\n\n", t.ID, t.Name, ticketStatus(t.Status)))
-	}
-
-	if err := h.wa.SendText(phone, sb.String()); err != nil {
-		log.Printf("bot: failed to send ticket list to %s: %v", phone, err)
-	}
-}
-
-func (h *Handler) sendHelp(user *store.User, phone string) {
-	msg := fmt.Sprintf(
-		"Olá, %s! Comandos disponíveis:\n\n• *meus chamados* — lista seus chamados no Nexus",
-		user.Name,
-	)
-	if err := h.wa.SendText(phone, msg); err != nil {
-		log.Printf("bot: failed to send help to %s: %v", phone, err)
-	}
-}
-
-// ticketStatus maps GLPI ticket status IDs to readable labels.
-// Reference: GLPI source — inc/ticket.class.php
-func ticketStatus(status int) string {
-	switch status {
-	case 1:
-		return "Novo"
-	case 2:
-		return "Em atendimento (atribuído)"
-	case 3:
-		return "Em atendimento (planejado)"
-	case 4:
-		return "Pendente"
-	case 5:
-		return "Solucionado"
-	case 6:
-		return "Fechado"
-	default:
-		return fmt.Sprintf("Desconhecido (%d)", status)
+	if err := h.wa.SendText(phone, reply); err != nil {
+		log.Printf("bot: failed to send reply to %s: %v", phone, err)
 	}
 }

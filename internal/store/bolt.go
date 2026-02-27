@@ -8,7 +8,35 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-var usersBucket = []byte("users")
+var (
+	usersBucket         = []byte("users")
+	conversationsBucket = []byte("conversations")
+)
+
+const maxConversationTurns = 50
+
+// TurnPart represents a single part of a conversation turn (text or function call/response).
+type TurnPart struct {
+	Text             string            `json:"text,omitempty"`
+	FunctionCall     *FunctionCallPart `json:"function_call,omitempty"`
+	FunctionResponse *FunctionRespPart `json:"function_response,omitempty"`
+}
+
+type FunctionCallPart struct {
+	Name string         `json:"name"`
+	Args map[string]any `json:"args,omitempty"`
+}
+
+type FunctionRespPart struct {
+	Name     string         `json:"name"`
+	Response map[string]any `json:"response"`
+}
+
+// ConversationTurn is one message in the conversation (user or model).
+type ConversationTurn struct {
+	Role  string     `json:"role"`
+	Parts []TurnPart `json:"parts"`
+}
 
 type User struct {
 	Phone           string    `json:"phone"`
@@ -22,6 +50,9 @@ type Store interface {
 	SaveUser(u User) error
 	GetUser(phone string) (*User, error)
 	DeleteUser(phone string) error
+	GetHistory(phone string) ([]ConversationTurn, error)
+	SaveHistory(phone string, turns []ConversationTurn) error
+	ClearHistory(phone string) error
 	Close() error
 }
 
@@ -36,7 +67,10 @@ func NewBoltStore(path string) (*BoltStore, error) {
 	}
 
 	err = db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists(usersBucket)
+		if _, err := tx.CreateBucketIfNotExists(usersBucket); err != nil {
+			return err
+		}
+		_, err := tx.CreateBucketIfNotExists(conversationsBucket)
 		return err
 	})
 	if err != nil {
@@ -78,6 +112,37 @@ func (s *BoltStore) GetUser(phone string) (*User, error) {
 func (s *BoltStore) DeleteUser(phone string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		return tx.Bucket(usersBucket).Delete([]byte(phone))
+	})
+}
+
+func (s *BoltStore) GetHistory(phone string) ([]ConversationTurn, error) {
+	var turns []ConversationTurn
+	err := s.db.View(func(tx *bolt.Tx) error {
+		v := tx.Bucket(conversationsBucket).Get([]byte(phone))
+		if v == nil {
+			return nil
+		}
+		return json.Unmarshal(v, &turns)
+	})
+	return turns, err
+}
+
+func (s *BoltStore) SaveHistory(phone string, turns []ConversationTurn) error {
+	if len(turns) > maxConversationTurns {
+		turns = turns[len(turns)-maxConversationTurns:]
+	}
+	return s.db.Update(func(tx *bolt.Tx) error {
+		data, err := json.Marshal(turns)
+		if err != nil {
+			return err
+		}
+		return tx.Bucket(conversationsBucket).Put([]byte(phone), data)
+	})
+}
+
+func (s *BoltStore) ClearHistory(phone string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(conversationsBucket).Delete([]byte(phone))
 	})
 }
 
