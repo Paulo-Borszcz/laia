@@ -17,7 +17,7 @@ const (
 	maxToolIterations = 5
 	rateLimitWindow   = time.Minute
 	rateLimitMax      = 10
-	geminiModel       = "gemini-2.5-flash"
+	geminiModel       = "gemini-2.0-flash"
 )
 
 // RegistryBuilder creates a tool registry for a given GLPI session.
