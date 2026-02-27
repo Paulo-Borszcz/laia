@@ -3,6 +3,8 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/lojasmm/laia/internal/ai"
 	"github.com/lojasmm/laia/internal/glpi"
@@ -21,26 +23,66 @@ func NewListMyTickets(g *glpi.Client, token string) *ListMyTickets {
 
 func (t *ListMyTickets) Name() string { return "list_my_tickets" }
 func (t *ListMyTickets) Description() string {
-	return "Lista todos os chamados do usuário atual no Nexus/GLPI"
+	return `Lista os chamados do usuario atual no Nexus/GLPI.
+Quando usar: quando o usuario quiser ver seus proprios chamados sem filtros complexos. Ex: "meus chamados", "meu ultimo chamado".
+Parametros opcionais: status (filtra por estado), limit (quantidade maxima de resultados).
+Retorna: lista com id, nome, status e data de cada chamado.
+Prefira search_tickets_advanced quando houver filtros por texto, periodo, urgencia ou tecnico.`
 }
-func (t *ListMyTickets) Parameters() *ai.ParamSchema { return nil }
+func (t *ListMyTickets) Parameters() *ai.ParamSchema {
+	return &ai.ParamSchema{
+		Type: "object",
+		Properties: map[string]*ai.ParamSchema{
+			"status": {
+				Type:        "string",
+				Description: "Filtrar por status: aberto, pendente, solucionado, fechado, todos. Default: todos",
+				Enum:        []string{"aberto", "pendente", "solucionado", "fechado", "todos"},
+			},
+			"limit": {
+				Type:        "integer",
+				Description: "Quantidade maxima de chamados retornados (1-50). Default: 20. Use limit=1 para 'meu ultimo chamado'.",
+			},
+		},
+	}
+}
 
-func (t *ListMyTickets) Execute(_ context.Context, _ map[string]any) (map[string]any, error) {
+func (t *ListMyTickets) Execute(_ context.Context, args map[string]any) (map[string]any, error) {
 	tickets, err := t.glpi.GetMyTickets(t.sessionToken)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao listar chamados: %w", err)
 	}
 
-	items := make([]map[string]any, len(tickets))
-	for i, tk := range tickets {
-		items[i] = map[string]any{
+	statusFilter := optionalStringArg(args, "status")
+	limit := optionalIntArg(args, "limit")
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+
+	allowedStatuses := mapStatusToGLPI(statusFilter)
+
+	var filtered []map[string]any
+	for _, tk := range tickets {
+		if len(allowedStatuses) > 0 && !intInSlice(tk.Status, allowedStatuses) {
+			continue
+		}
+		filtered = append(filtered, map[string]any{
 			"id":     tk.ID,
 			"nome":   tk.Name,
 			"status": ticketStatusLabel(tk.Status),
 			"data":   tk.DateCreated,
-		}
+		})
 	}
-	return map[string]any{"total": len(tickets), "chamados": items}, nil
+
+	totalSemFiltro := len(tickets)
+	if limit < len(filtered) {
+		filtered = filtered[:limit]
+	}
+
+	result := map[string]any{"total": len(filtered), "chamados": filtered}
+	if statusFilter != "" && statusFilter != "todos" {
+		result["total_sem_filtro"] = totalSemFiltro
+	}
+	return result, nil
 }
 
 // --- GetTicket ---
@@ -292,32 +334,71 @@ func NewSearchTicketsAdvanced(g *glpi.Client, token string) *SearchTicketsAdvanc
 
 func (t *SearchTicketsAdvanced) Name() string { return "search_tickets_advanced" }
 func (t *SearchTicketsAdvanced) Description() string {
-	return "Busca chamados com filtros avançados. Combine qualquer conjunto de filtros: status, texto, urgência, técnico, solicitante, observador, datas."
+	return `Busca chamados por palavra-chave, status, periodo, urgencia ou tecnico.
+Quando usar: sempre que o usuario quiser encontrar chamados por algum criterio. Ex: "chamados de VPN", "chamados abertos", "chamados do mes".
+O campo 'query' busca no titulo E descricao simultaneamente.
+Se nenhum criterio for informado, pedira esclarecimento ao usuario.
+Prefira esta ferramenta sobre list_my_tickets quando houver qualquer filtro de busca.
+Retorna: lista com id, titulo, status, datas, urgencia, categoria, tecnico e solicitante.`
 }
 func (t *SearchTicketsAdvanced) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
 		Type: "object",
 		Properties: map[string]*ai.ParamSchema{
-			"status":          {Type: "integer", Description: "Filtrar por status: 1=Novo, 2=Atribuído, 3=Planejado, 4=Pendente, 5=Solucionado, 6=Fechado"},
-			"text":            {Type: "string", Description: "Buscar no título do chamado (contém)"},
-			"content":         {Type: "string", Description: "Buscar no conteúdo/descrição do chamado (contém)"},
-			"urgency":         {Type: "integer", Description: "Filtrar por urgência: 1-5"},
-			"assigned_to":     {Type: "string", Description: "Nome do técnico atribuído (contém)"},
-			"requester":       {Type: "string", Description: "Nome do solicitante (contém)"},
-			"observer":        {Type: "string", Description: "Nome do observador (contém)"},
-			"date_from":       {Type: "string", Description: "Data de abertura a partir de (formato: YYYY-MM-DD)"},
-			"date_to":         {Type: "string", Description: "Data de abertura até (formato: YYYY-MM-DD)"},
-			"close_date_from": {Type: "string", Description: "Data de fechamento a partir de (formato: YYYY-MM-DD)"},
-			"close_date_to":   {Type: "string", Description: "Data de fechamento até (formato: YYYY-MM-DD)"},
+			"query": {
+				Type:        "string",
+				Description: "Busca no titulo E descricao simultaneamente. Ex: 'VPN', 'impressora', 'email'",
+			},
+			"status": {
+				Type:        "string",
+				Description: "Filtrar por status: aberto (novo+atribuido+planejado), pendente, solucionado, fechado, todos",
+				Enum:        []string{"aberto", "pendente", "solucionado", "fechado", "todos"},
+			},
+			"period": {
+				Type:        "string",
+				Description: "Periodo: hoje, semana, mes, ano, ou intervalo YYYY-MM-DD..YYYY-MM-DD",
+			},
+			"urgency": {
+				Type:        "string",
+				Description: "Filtrar por urgencia: muito_baixa, baixa, media, alta, muito_alta",
+				Enum:        []string{"muito_baixa", "baixa", "media", "alta", "muito_alta"},
+			},
+			"assigned_to": {
+				Type:        "string",
+				Description: "Nome parcial do tecnico atribuido. Ex: 'João', 'Silva'",
+			},
+			"requester": {
+				Type:        "string",
+				Description: "Nome parcial do solicitante. Ex: 'Maria', 'Santos'",
+			},
 		},
 	}
 }
 
 func (t *SearchTicketsAdvanced) Execute(_ context.Context, args map[string]any) (map[string]any, error) {
+	query := optionalStringArg(args, "query")
+	status := optionalStringArg(args, "status")
+	period := optionalStringArg(args, "period")
+	urgency := optionalStringArg(args, "urgency")
+	assignedTo := optionalStringArg(args, "assigned_to")
+	requester := optionalStringArg(args, "requester")
+
+	if query == "" && status == "" && period == "" && urgency == "" && assignedTo == "" && requester == "" {
+		return clarification(
+			"O que voce gostaria de buscar? Informe pelo menos um criterio.",
+			[]string{"texto (ex: VPN)", "status (aberto/pendente)", "periodo (hoje/semana/mes)", "urgencia", "tecnico atribuido"},
+			"Use search_tickets_advanced com pelo menos um parametro preenchido.",
+		), nil
+	}
+
+	// GLPI search uses criteria groups: top-level criteria linked with AND,
+	// sub-criteria inside a group linked with OR.
+	// Reference: nexus_apirest.md — criteria[N][criteria][M] for sub-groups.
 	criteria := map[string]string{}
 	idx := 0
 
-	addCriteria := func(field, searchType, value string) {
+	// addTopCriteria adds a single top-level AND criterion.
+	addTopCriteria := func(field, searchType, value string) {
 		if idx > 0 {
 			criteria[fmt.Sprintf("criteria[%d][link]", idx)] = "AND"
 		}
@@ -327,38 +408,64 @@ func (t *SearchTicketsAdvanced) Execute(_ context.Context, args map[string]any) 
 		idx++
 	}
 
-	if text, _ := args["text"].(string); text != "" {
-		addCriteria("1", "contains", text) // Title
+	// addORGroup adds a top-level AND group with multiple OR sub-criteria.
+	addORGroup := func(field, searchType string, values []string) {
+		if idx > 0 {
+			criteria[fmt.Sprintf("criteria[%d][link]", idx)] = "AND"
+		}
+		for j, v := range values {
+			prefix := fmt.Sprintf("criteria[%d][criteria][%d]", idx, j)
+			if j > 0 {
+				criteria[prefix+"[link]"] = "OR"
+			}
+			criteria[prefix+"[field]"] = field
+			criteria[prefix+"[searchtype]"] = searchType
+			criteria[prefix+"[value]"] = v
+		}
+		idx++
 	}
-	if content, _ := args["content"].(string); content != "" {
-		addCriteria("21", "contains", content) // Description body
+
+	// query: title OR content (sub-group)
+	if query != "" {
+		addORGroup("1", "contains", []string{query, query})
+		// Override second sub-criterion to search field 21 (content)
+		prefix := fmt.Sprintf("criteria[%d][criteria][1]", idx-1)
+		criteria[prefix+"[field]"] = "21"
 	}
-	if status, err := intArg(args, "status"); err == nil {
-		addCriteria("12", "equals", fmt.Sprintf("%d", status))
+
+	// status: "aberto" = 1 OR 2 OR 3 (sub-group)
+	if status != "" && status != "todos" {
+		statusCodes := mapStatusToGLPI(status)
+		vals := make([]string, len(statusCodes))
+		for i, c := range statusCodes {
+			vals[i] = fmt.Sprintf("%d", c)
+		}
+		addORGroup("12", "equals", vals)
 	}
-	if urgency, err := intArg(args, "urgency"); err == nil {
-		addCriteria("10", "equals", fmt.Sprintf("%d", urgency))
+
+	// period: date range with AND
+	if period != "" {
+		dateFrom, dateTo := parsePeriod(period)
+		if dateFrom != "" {
+			addTopCriteria("15", "morethan", dateFrom)
+		}
+		if dateTo != "" {
+			addTopCriteria("15", "lessthan", dateTo)
+		}
 	}
-	if v, _ := args["assigned_to"].(string); v != "" {
-		addCriteria("5", "contains", v) // Assigned technician
+
+	if urgency != "" {
+		code := mapUrgencyToGLPI(urgency)
+		if code > 0 {
+			addTopCriteria("10", "equals", fmt.Sprintf("%d", code))
+		}
 	}
-	if v, _ := args["requester"].(string); v != "" {
-		addCriteria("4", "contains", v) // Requester
+
+	if assignedTo != "" {
+		addTopCriteria("5", "contains", assignedTo)
 	}
-	if v, _ := args["observer"].(string); v != "" {
-		addCriteria("66", "contains", v) // Observer
-	}
-	if v, _ := args["date_from"].(string); v != "" {
-		addCriteria("15", "morethan", v) // Opening date >=
-	}
-	if v, _ := args["date_to"].(string); v != "" {
-		addCriteria("15", "lessthan", v) // Opening date <=
-	}
-	if v, _ := args["close_date_from"].(string); v != "" {
-		addCriteria("16", "morethan", v) // Closing date >=
-	}
-	if v, _ := args["close_date_to"].(string); v != "" {
-		addCriteria("16", "lessthan", v) // Closing date <=
+	if requester != "" {
+		addTopCriteria("4", "contains", requester)
 	}
 
 	result, err := t.glpi.AdvancedSearchTickets(t.sessionToken, criteria)
@@ -753,6 +860,68 @@ func (t *GetFollowups) Execute(_ context.Context, args map[string]any) (map[stri
 		}
 	}
 	return map[string]any{"total": len(followups), "comentarios": items}, nil
+}
+
+// --- search helpers ---
+
+// mapStatusToGLPI converts friendly status names to GLPI status codes.
+// "aberto" groups Novo(1), Atribuído(2), Planejado(3).
+func mapStatusToGLPI(status string) []int {
+	switch status {
+	case "aberto":
+		return []int{1, 2, 3}
+	case "pendente":
+		return []int{4}
+	case "solucionado":
+		return []int{5}
+	case "fechado":
+		return []int{6}
+	default:
+		return nil
+	}
+}
+
+// parsePeriod converts friendly period names or date ranges to (from, to) date strings.
+func parsePeriod(period string) (string, string) {
+	now := time.Now()
+	today := now.Format("2006-01-02")
+
+	switch period {
+	case "hoje":
+		return today, today
+	case "semana":
+		weekAgo := now.AddDate(0, 0, -7).Format("2006-01-02")
+		return weekAgo, today
+	case "mes":
+		monthAgo := now.AddDate(0, -1, 0).Format("2006-01-02")
+		return monthAgo, today
+	case "ano":
+		yearAgo := now.AddDate(-1, 0, 0).Format("2006-01-02")
+		return yearAgo, today
+	default:
+		// YYYY-MM-DD..YYYY-MM-DD
+		if parts := strings.SplitN(period, "..", 2); len(parts) == 2 {
+			return parts[0], parts[1]
+		}
+		return "", ""
+	}
+}
+
+func mapUrgencyToGLPI(urgency string) int {
+	switch urgency {
+	case "muito_baixa":
+		return 1
+	case "baixa":
+		return 2
+	case "media":
+		return 3
+	case "alta":
+		return 4
+	case "muito_alta":
+		return 5
+	default:
+		return 0
+	}
 }
 
 // --- helpers ---

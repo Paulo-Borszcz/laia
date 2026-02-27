@@ -14,7 +14,11 @@ func NewRespondInteractive() *RespondInteractive { return &RespondInteractive{} 
 
 func (t *RespondInteractive) Name() string { return "respond_interactive" }
 func (t *RespondInteractive) Description() string {
-	return "Envia mensagem interativa com botões ou lista de opções clicáveis. Use no lugar de resposta de texto quando quiser oferecer opções ao usuário."
+	return `Envia mensagem interativa com botoes ou lista de opcoes clicaveis via WhatsApp.
+Quando usar: SEMPRE que houver opcoes predefinidas para o usuario escolher. Tambem use para apresentar esclarecimentos quando uma ferramenta retornar need_clarification=true.
+Tipos: buttons (max 3 botoes, titulo max 20 chars) para opcoes simples; list (max 10 itens por secao) para muitas opcoes.
+Retorna: mensagem enviada ao usuario via WhatsApp.
+NUNCA use texto simples quando poderia usar botoes ou lista.`
 }
 
 func (t *RespondInteractive) Parameters() *ai.ParamSchema {

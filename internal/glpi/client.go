@@ -402,13 +402,18 @@ func (c *Client) SearchKnowledgeBase(sessionToken, query string) (*SearchRespons
 	}
 	c.setSessionHeaders(req, sessionToken)
 
+	// KnowbaseItem search options: 2=ID, 6=Subject(name), 7=Content(answer)
 	q := req.URL.Query()
-	q.Set("criteria[0][field]", "1")
+	q.Set("criteria[0][field]", "6")
 	q.Set("criteria[0][searchtype]", "contains")
 	q.Set("criteria[0][value]", query)
-	q.Set("forcedisplay[0]", "1")
-	q.Set("forcedisplay[1]", "2")
-	q.Set("forcedisplay[2]", "6")
+	q.Set("criteria[1][link]", "OR")
+	q.Set("criteria[1][field]", "7")
+	q.Set("criteria[1][searchtype]", "contains")
+	q.Set("criteria[1][value]", query)
+	q.Set("forcedisplay[0]", "2")
+	q.Set("forcedisplay[1]", "6")
+	q.Set("forcedisplay[2]", "7")
 	q.Set("range", "0-9")
 	req.URL.RawQuery = q.Encode()
 

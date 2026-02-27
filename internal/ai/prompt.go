@@ -125,5 +125,33 @@ SEMPRE use respond_interactive quando houver opções predefinidas para o usuár
   - Respostas informativas
   - Quando não há opções predefinidas
 
-Formatação no campo text: *negrito*, _itálico_, ~riscado~, • para listas`, userName, userID)
+Formatação no campo text: *negrito*, _itálico_, ~riscado~, • para listas
+
+ESCLARECIMENTOS:
+Quando uma ferramenta retornar "need_clarification": true, NÃO invente dados. Em vez disso:
+1. Leia o campo "question" e "options" retornados
+2. Use respond_interactive para apresentar as opções ao usuário (botões se ≤3, lista se >3)
+3. Aguarde a resposta do usuário antes de chamar a ferramenta novamente
+4. NUNCA preencha parâmetros com suposições — sempre pergunte
+
+ESTRATEGIA DE BUSCA (mapeamento de intenções):
+- "meus chamados" ou "meus tickets" → list_my_tickets
+- "meus chamados abertos" → list_my_tickets(status="aberto")
+- "meu último chamado" → list_my_tickets(limit=1)
+- "chamados de VPN" / "chamados sobre X" → search_tickets_advanced(query="VPN")
+- "chamados abertos de VPN" → search_tickets_advanced(query="VPN", status="aberto")
+- "chamados do mês" / "chamados recentes" → search_tickets_advanced(period="mes")
+- "chamados urgentes" → search_tickets_advanced(urgency="alta")
+- "chamados do João" → search_tickets_advanced(assigned_to="João")
+- "meu computador" / "meus ativos" → search_assets (perguntar tipo se não especificado)
+- "como configura VPN" / "tutorial de X" → search_knowledge_base(query="VPN")
+- "quero abrir chamado" → fluxo de criação (Etapas 1-4)
+
+PRIORIDADE DAS FERRAMENTAS (use nesta ordem de preferência):
+1. search_tickets_advanced — para qualquer busca com filtros (texto, status, período, urgência, técnico)
+2. list_my_tickets — apenas para listar chamados do próprio usuário sem filtros complexos
+3. get_ticket — para detalhes de um chamado específico quando o ID é conhecido
+4. search_knowledge_base → get_kb_article — para dúvidas sobre procedimentos
+5. search_assets — para consulta de equipamentos/patrimônio
+6. respond_interactive — SEMPRE que houver opções para o usuário escolher`, userName, userID)
 }

@@ -19,24 +19,40 @@ func NewSearchAssets(g *glpi.Client, token string) *SearchAssets {
 
 func (t *SearchAssets) Name() string { return "search_assets" }
 func (t *SearchAssets) Description() string {
-	return "Busca ativos de TI (computadores, monitores, impressoras) por nome ou número de série"
+	return `Busca ativos de TI por nome ou numero de serie.
+Quando usar: quando o usuario perguntar sobre equipamentos, patrimonio, ativos. Ex: "meu computador", "impressora do 2o andar", "monitor serial XYZ".
+Tipos disponiveis (mapeamento PT→EN): computador→Computer, monitor→Monitor, impressora→Printer, telefone→Phone, equipamento de rede→NetworkEquipment.
+Se o tipo nao for informado, pedira esclarecimento.
+Retorna: lista com id, nome e status do ativo.`
 }
 func (t *SearchAssets) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
 		Type: "object",
 		Properties: map[string]*ai.ParamSchema{
-			"type":  {Type: "string", Description: "Tipo de ativo: Computer, Monitor, Printer, Phone, NetworkEquipment"},
-			"query": {Type: "string", Description: "Termo de busca (nome, serial, etc.)"},
+			"type": {
+				Type:        "string",
+				Description: "Tipo de ativo (em ingles): Computer, Monitor, Printer, Phone, NetworkEquipment. Converta do portugues se necessario.",
+				Enum:        []string{"Computer", "Monitor", "Printer", "Phone", "NetworkEquipment"},
+			},
+			"query": {Type: "string", Description: "Termo de busca (nome, serial, patrimonio)"},
 		},
-		Required: []string{"type", "query"},
+		Required: []string{"query"},
 	}
 }
 
 func (t *SearchAssets) Execute(_ context.Context, args map[string]any) (map[string]any, error) {
-	assetType, _ := stringArg(args, "type")
-	query, _ := stringArg(args, "query")
-	if assetType == "" || query == "" {
-		return nil, fmt.Errorf("tipo e termo de busca são obrigatórios")
+	assetType := optionalStringArg(args, "type")
+	query := optionalStringArg(args, "query")
+	if query == "" {
+		return nil, fmt.Errorf("termo de busca é obrigatório")
+	}
+
+	if assetType == "" {
+		return clarification(
+			"Qual tipo de ativo voce quer buscar?",
+			[]string{"Computador", "Monitor", "Impressora", "Telefone", "Equipamento de rede"},
+			"Use respond_interactive com botoes para apresentar as opcoes ao usuario. Mapeie a resposta: Computador→Computer, Monitor→Monitor, Impressora→Printer, Telefone→Phone, Equipamento de rede→NetworkEquipment.",
+		), nil
 	}
 
 	allowed := map[string]bool{

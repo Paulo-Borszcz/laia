@@ -21,13 +21,16 @@ func NewSearchKnowledgeBase(g *glpi.Client, token string) *SearchKnowledgeBase {
 
 func (t *SearchKnowledgeBase) Name() string { return "search_knowledge_base" }
 func (t *SearchKnowledgeBase) Description() string {
-	return "Busca artigos na base de conhecimento do Nexus/GLPI por palavra-chave"
+	return `Busca artigos na base de conhecimento do Nexus/GLPI.
+Quando usar: quando o usuario perguntar "como faz...", "tem tutorial de...", "como configurar...", ou buscar solucoes para problemas conhecidos.
+Retorna: lista com id, nome e preview do conteudo de cada artigo.
+Use get_kb_article para ler o conteudo completo de um artigo especifico.`
 }
 func (t *SearchKnowledgeBase) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
 		Type: "object",
 		Properties: map[string]*ai.ParamSchema{
-			"query": {Type: "string", Description: "Termo de busca (ex: VPN, email, impressora)"},
+			"query": {Type: "string", Description: "Termo de busca (ex: VPN, email, impressora, como configurar)"},
 		},
 		Required: []string{"query"},
 	}
@@ -46,10 +49,15 @@ func (t *SearchKnowledgeBase) Execute(_ context.Context, args map[string]any) (m
 
 	items := make([]map[string]any, len(result.Data))
 	for i, item := range result.Data {
-		items[i] = map[string]any{
+		entry := map[string]any{
 			"id":   item["2"],
-			"nome": item["1"],
+			"nome": item["6"], // Field 6 = Subject/name
 		}
+		// Field 7 = Content/answer; include a truncated preview
+		if body, ok := item["7"].(string); ok && body != "" {
+			entry["preview"] = truncateText(body, 200)
+		}
+		items[i] = entry
 	}
 	return map[string]any{"total": result.TotalCount, "artigos": items}, nil
 }
@@ -67,7 +75,9 @@ func NewGetKBArticle(g *glpi.Client, token string) *GetKBArticle {
 
 func (t *GetKBArticle) Name() string { return "get_kb_article" }
 func (t *GetKBArticle) Description() string {
-	return "Retorna o conteúdo completo de um artigo da base de conhecimento"
+	return `Retorna o conteudo completo de um artigo da base de conhecimento.
+Quando usar: apos search_knowledge_base encontrar um artigo relevante, use esta ferramenta para ler o conteudo completo.
+Retorna: id, titulo e conteudo HTML do artigo.`
 }
 func (t *GetKBArticle) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{

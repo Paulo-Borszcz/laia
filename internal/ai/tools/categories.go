@@ -22,7 +22,10 @@ func NewGetDepartments(g *glpi.Client, token string) *GetDepartments {
 
 func (t *GetDepartments) Name() string { return "get_departments" }
 func (t *GetDepartments) Description() string {
-	return "Lista os departamentos/setores disponíveis para chamados (formulários do Nexus)"
+	return `Lista os departamentos/setores disponiveis para abertura de chamados.
+Quando usar: no fluxo de criacao de chamado (Etapa 2) para determinar o setor correto.
+NAO mostre a lista completa ao usuario — use para decidir internamente e confirmar.
+Retorna: lista com id e nome de cada departamento/formulario.`
 }
 func (t *GetDepartments) Parameters() *ai.ParamSchema { return nil }
 
@@ -58,7 +61,10 @@ func NewGetDepartmentCategories(g *glpi.Client, token string) *GetDepartmentCate
 
 func (t *GetDepartmentCategories) Name() string { return "get_department_categories" }
 func (t *GetDepartmentCategories) Description() string {
-	return "Lista as categorias de chamado disponíveis para um departamento/formulário. Retorna as categorias ITIL que o usuário pode selecionar."
+	return `Lista as categorias ITIL disponiveis para um departamento/formulario.
+Quando usar: no fluxo de criacao de chamado (Etapa 3) apos determinar o departamento.
+NAO mostre a lista completa ao usuario — analise e use respond_interactive com opcoes filtradas.
+Retorna: lista com id e nome de cada categoria.`
 }
 func (t *GetDepartmentCategories) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
@@ -151,7 +157,9 @@ func NewGetSubCategories(g *glpi.Client) *GetSubCategories {
 
 func (t *GetSubCategories) Name() string { return "get_subcategories" }
 func (t *GetSubCategories) Description() string {
-	return "Lista as sub-categorias de uma categoria ITIL. Use quando uma categoria tem filhas e você precisa aprofundar."
+	return `Lista as sub-categorias de uma categoria ITIL.
+Quando usar: no fluxo de criacao de chamado (Etapa 3) quando uma categoria tem sub-niveis.
+Retorna: lista com id e nome de cada sub-categoria.`
 }
 func (t *GetSubCategories) Parameters() *ai.ParamSchema {
 	return &ai.ParamSchema{
