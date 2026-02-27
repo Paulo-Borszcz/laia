@@ -10,17 +10,66 @@ import (
 )
 
 type Client struct {
-	baseURL  string
-	appToken string
-	http     *http.Client
+	baseURL      string
+	appToken     string
+	adminToken   string
+	adminProfile int
+	http         *http.Client
 }
 
-func NewClient(baseURL, appToken string) *Client {
+func NewClient(baseURL, appToken, adminToken string, adminProfile int) *Client {
 	return &Client{
-		baseURL:  baseURL,
-		appToken: appToken,
-		http:     &http.Client{Timeout: 15 * time.Second},
+		baseURL:      baseURL,
+		appToken:     appToken,
+		adminToken:   adminToken,
+		adminProfile: adminProfile,
+		http:         &http.Client{Timeout: 15 * time.Second},
 	}
+}
+
+// AdminSession creates a session with elevated profile for reading reference data
+// (e.g. ITILCategory) that regular self-service users can't access.
+func (c *Client) AdminSession() (string, error) {
+	if c.adminToken == "" {
+		return "", fmt.Errorf("admin token not configured")
+	}
+	session, err := c.InitSession(c.adminToken)
+	if err != nil {
+		return "", err
+	}
+	if c.adminProfile > 0 {
+		if err := c.ChangeActiveProfile(session, c.adminProfile); err != nil {
+			c.KillSession(session)
+			return "", fmt.Errorf("changing to admin profile: %w", err)
+		}
+	}
+	return session, nil
+}
+
+// ChangeActiveProfile switches the active profile for a session.
+// Reference: POST /apirest.php/changeActiveProfile
+func (c *Client) ChangeActiveProfile(sessionToken string, profileID int) error {
+	body, err := json.Marshal(map[string]int{"profiles_id": profileID})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/apirest.php/changeActiveProfile", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	c.setSessionHeaders(req, sessionToken)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("changeActiveProfile request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("changeActiveProfile status %d: %s", resp.StatusCode, respBody)
+	}
+	return nil
 }
 
 // InitSession validates a user_token and returns a session_token.

@@ -99,6 +99,8 @@ type FormQuestion struct {
 	ID          int    `json:"id"`
 	Name        string `json:"name"`
 	FieldType   string `json:"fieldtype"`
+	ItemType    string `json:"itemtype"`
+	Values      string `json:"values"`
 	Description string `json:"description"`
 }
 

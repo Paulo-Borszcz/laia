@@ -5,13 +5,16 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
-	NexusBaseURL  string
-	NexusAppToken string
+	NexusBaseURL      string
+	NexusAppToken     string
+	NexusAdminToken   string
+	NexusAdminProfile int
 
 	WAPhoneNumberID string
 	WAAccessToken   string
@@ -30,7 +33,9 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		NexusBaseURL:    os.Getenv("NEXUS_BASE_URL"),
 		NexusAppToken:   os.Getenv("NEXUS_APP_TOKEN"),
-		WAPhoneNumberID: os.Getenv("WA_PHONE_NUMBER_ID"),
+		NexusAdminToken:   os.Getenv("NEXUS_ADMIN_TOKEN"),
+		NexusAdminProfile: parseIntEnv("NEXUS_ADMIN_PROFILE"),
+		WAPhoneNumberID:   os.Getenv("WA_PHONE_NUMBER_ID"),
 		WAAccessToken:   os.Getenv("WA_ACCESS_TOKEN"),
 		WAVerifyToken:   os.Getenv("WA_VERIFY_TOKEN"),
 		GeminiAPIKey:    os.Getenv("GEMINI_API_KEY"),
@@ -69,6 +74,11 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func parseIntEnv(key string) int {
+	v, _ := strconv.Atoi(os.Getenv(key))
+	return v
 }
 
 func randomHex(n int) (string, error) {

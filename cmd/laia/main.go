@@ -34,7 +34,7 @@ func main() {
 	}
 	defer db.Close()
 
-	glpiClient := glpi.NewClient(cfg.NexusBaseURL, cfg.NexusAppToken)
+	glpiClient := glpi.NewClient(cfg.NexusBaseURL, cfg.NexusAppToken, cfg.NexusAdminToken, cfg.NexusAdminProfile)
 	waClient := whatsapp.NewClient(cfg.WAPhoneNumberID, cfg.WAAccessToken)
 
 	ctx := context.Background()

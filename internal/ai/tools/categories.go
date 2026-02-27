@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/lojasmm/laia/internal/ai"
@@ -32,14 +33,18 @@ func (t *GetDepartments) Execute(_ context.Context, _ map[string]any) (map[strin
 		return nil, fmt.Errorf("erro ao buscar departamentos: %w", err)
 	}
 
-	items := make([]map[string]any, len(forms))
-	for i, f := range forms {
-		items[i] = map[string]any{
+	items := make([]map[string]any, 0, len(forms))
+	for _, f := range forms {
+		// Filtrar formulários-guia que não são departamentos reais
+		if f.Name == "Abro chamado a quem? GUIA" || f.Name == "Abrir Chamado Loja" {
+			continue
+		}
+		items = append(items, map[string]any{
 			"id":   f.ID,
 			"nome": f.Name,
-		}
+		})
 	}
-	return map[string]any{"total": len(forms), "departamentos": items}, nil
+	return map[string]any{"total": len(items), "departamentos": items}, nil
 }
 
 // --- GetDepartmentCategories ---
@@ -55,7 +60,7 @@ func NewGetDepartmentCategories(g *glpi.Client, token string) *GetDepartmentCate
 
 func (t *GetDepartmentCategories) Name() string { return "get_department_categories" }
 func (t *GetDepartmentCategories) Description() string {
-	return "Lista as seções e perguntas de um formulário/departamento para entender as categorias disponíveis"
+	return "Lista as categorias de chamado disponíveis para um departamento/formulário. Retorna as categorias ITIL que o usuário pode selecionar."
 }
 func (t *GetDepartmentCategories) Parameters() *genai.Schema {
 	return &genai.Schema{
@@ -73,71 +78,112 @@ func (t *GetDepartmentCategories) Execute(_ context.Context, args map[string]any
 		return nil, err
 	}
 
+	// Busca seções do formulário
 	sections, err := t.glpi.GetFormSections(t.sessionToken, formID)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao buscar seções do formulário: %w", err)
 	}
 
-	result := make([]map[string]any, 0, len(sections))
+	// Procura a primeira question do tipo dropdown/ITILCategory para extrair o tree_root
 	for _, s := range sections {
 		questions, err := t.glpi.GetSectionQuestions(t.sessionToken, s.ID)
 		if err != nil {
 			continue
 		}
 
-		qItems := make([]map[string]any, len(questions))
-		for j, q := range questions {
-			qItems[j] = map[string]any{
-				"id":   q.ID,
-				"nome": q.Name,
-				"tipo": q.FieldType,
+		for _, q := range questions {
+			if q.FieldType != "dropdown" || q.ItemType != "ITILCategory" {
+				continue
 			}
-		}
 
-		result = append(result, map[string]any{
-			"secao_id":   s.ID,
-			"secao_nome": s.Name,
-			"perguntas":  qItems,
-		})
+			// Extrair show_tree_root do campo values (JSON string)
+			var vals dropdownValues
+			if err := json.Unmarshal([]byte(q.Values), &vals); err != nil {
+				continue
+			}
+
+			rootID := 0
+			if vals.ShowTreeRoot != "" {
+				fmt.Sscanf(vals.ShowTreeRoot, "%d", &rootID)
+			}
+
+			// Usa admin session para ler categorias ITIL (usuário normal não tem permissão)
+			adminSession, err := t.glpi.AdminSession()
+			if err != nil {
+				return nil, fmt.Errorf("erro ao criar sessão admin: %w", err)
+			}
+			defer t.glpi.KillSession(adminSession)
+
+			categories, err := t.glpi.GetCategories(adminSession, rootID)
+			if err != nil {
+				return nil, fmt.Errorf("erro ao buscar categorias: %w", err)
+			}
+
+			items := make([]map[string]any, len(categories))
+			for i, c := range categories {
+				items[i] = map[string]any{
+					"id":   c.ID,
+					"nome": c.Name,
+				}
+			}
+			return map[string]any{
+				"total":      len(categories),
+				"categorias": items,
+			}, nil
+		}
 	}
 
-	return map[string]any{"total_secoes": len(result), "secoes": result}, nil
+	return map[string]any{
+		"total":      0,
+		"categorias": []map[string]any{},
+		"erro":       "nenhuma categoria encontrada para este formulário",
+	}, nil
 }
 
-// --- GetITILCategories ---
-
-type GetITILCategories struct {
-	glpi         *glpi.Client
-	sessionToken string
+// dropdownValues extracts the tree root config from FormCreator question values.
+type dropdownValues struct {
+	ShowTreeRoot string `json:"show_tree_root"`
 }
 
-func NewGetITILCategories(g *glpi.Client, token string) *GetITILCategories {
-	return &GetITILCategories{glpi: g, sessionToken: token}
+// --- GetSubCategories ---
+
+type GetSubCategories struct {
+	glpi *glpi.Client
 }
 
-func (t *GetITILCategories) Name() string { return "get_itil_categories" }
-func (t *GetITILCategories) Description() string {
-	return "Lista as categorias ITIL filtrando por categoria pai. Use parent_id=0 para categorias raiz"
+func NewGetSubCategories(g *glpi.Client) *GetSubCategories {
+	return &GetSubCategories{glpi: g}
 }
-func (t *GetITILCategories) Parameters() *genai.Schema {
+
+func (t *GetSubCategories) Name() string { return "get_subcategories" }
+func (t *GetSubCategories) Description() string {
+	return "Lista as sub-categorias de uma categoria ITIL. Use quando uma categoria tem filhas e você precisa aprofundar."
+}
+func (t *GetSubCategories) Parameters() *genai.Schema {
 	return &genai.Schema{
 		Type: genai.TypeObject,
 		Properties: map[string]*genai.Schema{
-			"parent_id": {Type: genai.TypeInteger, Description: "ID da categoria pai (0 para categorias raiz)"},
+			"category_id": {Type: genai.TypeInteger, Description: "ID da categoria pai"},
 		},
-		Required: []string{"parent_id"},
+		Required: []string{"category_id"},
 	}
 }
 
-func (t *GetITILCategories) Execute(_ context.Context, args map[string]any) (map[string]any, error) {
-	parentID, err := intArg(args, "parent_id")
+func (t *GetSubCategories) Execute(_ context.Context, args map[string]any) (map[string]any, error) {
+	parentID, err := intArg(args, "category_id")
 	if err != nil {
 		return nil, err
 	}
 
-	categories, err := t.glpi.GetCategories(t.sessionToken, parentID)
+	adminSession, err := t.glpi.AdminSession()
 	if err != nil {
-		return nil, fmt.Errorf("erro ao buscar categorias ITIL: %w", err)
+		return nil, fmt.Errorf("erro ao criar sessão admin: %w", err)
+	}
+	defer t.glpi.KillSession(adminSession)
+
+	categories, err := t.glpi.GetCategories(adminSession, parentID)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar sub-categorias: %w", err)
 	}
 
 	items := make([]map[string]any, len(categories))
@@ -152,4 +198,4 @@ func (t *GetITILCategories) Execute(_ context.Context, args map[string]any) (map
 
 var _ ai.Tool = (*GetDepartments)(nil)
 var _ ai.Tool = (*GetDepartmentCategories)(nil)
-var _ ai.Tool = (*GetITILCategories)(nil)
+var _ ai.Tool = (*GetSubCategories)(nil)
