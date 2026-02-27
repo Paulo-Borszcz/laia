@@ -449,22 +449,17 @@ func (c *Client) SearchAssets(sessionToken, itemtype, query string) (*SearchResp
 
 // GetCategories returns ITIL ticket categories filtered by parent.
 // parentID=0 returns root categories (departments), parentID>0 returns sub-categories.
-// Reference: nexus_apirest.md — GET /apirest.php/search/ITILCategory/
+// Uses the list endpoint with searchText filter on itilcategories_id.
+// Reference: nexus_apirest.md — GET /apirest.php/ITILCategory/
 func (c *Client) GetCategories(sessionToken string, parentID int) ([]ITILCategory, error) {
-	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/apirest.php/search/ITILCategory/", nil)
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/apirest.php/ITILCategory/", nil)
 	if err != nil {
 		return nil, err
 	}
 	c.setSessionHeaders(req, sessionToken)
 
 	q := req.URL.Query()
-	// Field 3 = itilcategories_id (parent category)
-	q.Set("criteria[0][field]", "3")
-	q.Set("criteria[0][searchtype]", "equals")
-	q.Set("criteria[0][value]", fmt.Sprintf("%d", parentID))
-	// Display: id (2), name (1), completename (14)
-	q.Set("forcedisplay[0]", "2")
-	q.Set("forcedisplay[1]", "1")
+	q.Set("searchText[itilcategories_id]", fmt.Sprintf("%d", parentID))
 	q.Set("range", "0-49")
 	req.URL.RawQuery = q.Encode()
 
@@ -479,25 +474,9 @@ func (c *Client) GetCategories(sessionToken string, parentID int) ([]ITILCategor
 		return nil, fmt.Errorf("getCategories status %d: %s", resp.StatusCode, body)
 	}
 
-	var result SearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decoding categories search: %w", err)
-	}
-
-	categories := make([]ITILCategory, 0, len(result.Data))
-	for _, row := range result.Data {
-		cat := ITILCategory{}
-		if v, ok := row["2"]; ok {
-			if f, ok := v.(float64); ok {
-				cat.ID = int(f)
-			}
-		}
-		if v, ok := row["1"]; ok {
-			if s, ok := v.(string); ok {
-				cat.Name = s
-			}
-		}
-		categories = append(categories, cat)
+	var categories []ITILCategory
+	if err := json.NewDecoder(resp.Body).Decode(&categories); err != nil {
+		return nil, fmt.Errorf("decoding categories: %w", err)
 	}
 	return categories, nil
 }
