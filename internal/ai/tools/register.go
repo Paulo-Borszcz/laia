@@ -13,7 +13,7 @@ func BuildRegistry(g *glpi.Client, sessionToken string, userID int) *ai.Registry
 	r := ai.NewRegistry()
 	r.Register(NewListMyTickets(g, sessionToken))
 	r.Register(NewGetTicket(g, sessionToken, userID))
-	r.Register(NewCreateTicket(g, sessionToken))
+	r.Register(NewCreateTicket(g, userID))
 	r.Register(NewUpdateTicketStatus(g, sessionToken, userID))
 	r.Register(NewAddFollowup(g, sessionToken, userID))
 	r.Register(NewGetFollowups(g, sessionToken, userID))

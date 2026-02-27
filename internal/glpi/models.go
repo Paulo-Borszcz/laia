@@ -48,11 +48,12 @@ type Followup struct {
 }
 
 type CreateTicketInput struct {
-	Name             string `json:"name"`
-	Content          string `json:"content"`
-	ITILCategoriesID int    `json:"itilcategories_id,omitempty"`
-	Urgency          int    `json:"urgency,omitempty"`
-	Type             int    `json:"type,omitempty"`
+	Name               string `json:"name"`
+	Content            string `json:"content"`
+	ITILCategoriesID   int    `json:"itilcategories_id,omitempty"`
+	Urgency            int    `json:"urgency,omitempty"`
+	Type               int    `json:"type,omitempty"`
+	UsersIDRequester   int    `json:"_users_id_requester,omitempty"`
 }
 
 type UpdateTicketInput struct {

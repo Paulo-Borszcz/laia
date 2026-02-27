@@ -96,12 +96,12 @@ func (t *GetTicket) Execute(_ context.Context, args map[string]any) (map[string]
 // --- CreateTicket ---
 
 type CreateTicket struct {
-	glpi         *glpi.Client
-	sessionToken string
+	glpi   *glpi.Client
+	userID int
 }
 
-func NewCreateTicket(g *glpi.Client, token string) *CreateTicket {
-	return &CreateTicket{glpi: g, sessionToken: token}
+func NewCreateTicket(g *glpi.Client, userID int) *CreateTicket {
+	return &CreateTicket{glpi: g, userID: userID}
 }
 
 func (t *CreateTicket) Name() string { return "create_ticket" }
@@ -133,17 +133,26 @@ func (t *CreateTicket) Execute(_ context.Context, args map[string]any) (map[stri
 		return nil, fmt.Errorf("category_id é obrigatório — use get_department_categories para obter o ID")
 	}
 
+	// Usa admin session pois usuários self-service não têm permissão
+	// para criar tickets diretamente via API (só via FormCreator na web).
+	adminSession, err := t.glpi.AdminSession()
+	if err != nil {
+		return nil, fmt.Errorf("erro ao criar sessão admin: %w", err)
+	}
+	defer t.glpi.KillSession(adminSession)
+
 	input := glpi.CreateTicketInput{
 		Name:             title,
 		Content:          description,
 		Type:             1, // Incidente
 		ITILCategoriesID: catID,
+		UsersIDRequester: t.userID,
 	}
 	if urgency, err := intArg(args, "urgency"); err == nil && urgency >= 1 && urgency <= 5 {
 		input.Urgency = urgency
 	}
 
-	id, err := t.glpi.CreateTicket(t.sessionToken, input)
+	id, err := t.glpi.CreateTicket(adminSession, input)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao criar chamado: %w", err)
 	}
