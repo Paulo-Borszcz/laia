@@ -447,6 +447,94 @@ func (c *Client) SearchAssets(sessionToken, itemtype, query string) (*SearchResp
 	return &result, nil
 }
 
+// GetForms returns available FormCreator forms (departments/sectors).
+// Reference: GET /apirest.php/PluginFormcreatorForm/
+func (c *Client) GetForms(sessionToken string) ([]Form, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/apirest.php/PluginFormcreatorForm/", nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setSessionHeaders(req, sessionToken)
+
+	q := req.URL.Query()
+	q.Set("range", "0-99")
+	q.Set("searchText[is_active]", "1")
+	req.URL.RawQuery = q.Encode()
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getForms request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("getForms status %d: %s", resp.StatusCode, body)
+	}
+
+	var forms []Form
+	if err := json.NewDecoder(resp.Body).Decode(&forms); err != nil {
+		return nil, fmt.Errorf("decoding forms: %w", err)
+	}
+	return forms, nil
+}
+
+// GetFormSections returns the sections of a FormCreator form.
+// Reference: GET /apirest.php/PluginFormcreatorForm/:id/PluginFormcreatorSection
+func (c *Client) GetFormSections(sessionToken string, formID int) ([]FormSection, error) {
+	url := fmt.Sprintf("%s/apirest.php/PluginFormcreatorForm/%d/PluginFormcreatorSection", c.baseURL, formID)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setSessionHeaders(req, sessionToken)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getFormSections request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("getFormSections status %d: %s", resp.StatusCode, body)
+	}
+
+	var sections []FormSection
+	if err := json.NewDecoder(resp.Body).Decode(&sections); err != nil {
+		return nil, fmt.Errorf("decoding form sections: %w", err)
+	}
+	return sections, nil
+}
+
+// GetSectionQuestions returns the questions of a FormCreator section.
+// Reference: GET /apirest.php/PluginFormcreatorSection/:id/PluginFormcreatorQuestion
+func (c *Client) GetSectionQuestions(sessionToken string, sectionID int) ([]FormQuestion, error) {
+	url := fmt.Sprintf("%s/apirest.php/PluginFormcreatorSection/%d/PluginFormcreatorQuestion", c.baseURL, sectionID)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setSessionHeaders(req, sessionToken)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getSectionQuestions request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("getSectionQuestions status %d: %s", resp.StatusCode, body)
+	}
+
+	var questions []FormQuestion
+	if err := json.NewDecoder(resp.Body).Decode(&questions); err != nil {
+		return nil, fmt.Errorf("decoding section questions: %w", err)
+	}
+	return questions, nil
+}
+
 // GetCategories returns ITIL ticket categories filtered by parent.
 // parentID=0 returns root categories (departments), parentID>0 returns sub-categories.
 // Uses the list endpoint with searchText filter on itilcategories_id.

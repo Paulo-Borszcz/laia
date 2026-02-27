@@ -82,6 +82,26 @@ type ITILCategory struct {
 	ITILCategoriesID int    `json:"itilcategories_id"`
 }
 
+// FormCreator models — plugin PluginFormcreator
+// Reference: https://github.com/pluginsGLPI/formcreator
+
+type Form struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type FormSection struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type FormQuestion struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	FieldType   string `json:"fieldtype"`
+	Description string `json:"description"`
+}
+
 // glpiInput wraps a value in the {"input": ...} envelope required by GLPI POST/PUT.
 type glpiInput[T any] struct {
 	Input T `json:"input"`

@@ -22,6 +22,7 @@ func BuildRegistry(g *glpi.Client, sessionToken string, userID int) *ai.Registry
 	r.Register(NewSearchAssets(g, sessionToken))
 	r.Register(NewGetDepartments(g, sessionToken))
 	r.Register(NewGetDepartmentCategories(g, sessionToken))
+	r.Register(NewGetITILCategories(g, sessionToken))
 	return r
 }
 
