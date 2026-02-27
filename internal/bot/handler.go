@@ -41,8 +41,8 @@ func (h *Handler) sendVerificationLink(phone string) {
 	body := "Olá! Eu sou a *Laia*, sua assistente virtual do *Nexus* aqui nas Lojas MM.\n\n" +
 		"Comigo você pode:\n" +
 		"• Abrir e acompanhar chamados\n" +
-		"• Consultar a base de conhecimento\n" +
-		"• Verificar seus ativos de TI\n\n" +
+		"• Adicionar comentários e atualizações\n" +
+		"• Consultar a base de conhecimento\n\n" +
 		"Para começarmos, preciso vincular seu WhatsApp à sua conta do Nexus. " +
 		"É rápido — basta clicar no botão abaixo!"
 
