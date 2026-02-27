@@ -23,13 +23,15 @@ type TurnPart struct {
 }
 
 type FunctionCallPart struct {
+	ID   string         `json:"id,omitempty"`
 	Name string         `json:"name"`
 	Args map[string]any `json:"args,omitempty"`
 }
 
 type FunctionRespPart struct {
-	Name     string         `json:"name"`
-	Response map[string]any `json:"response"`
+	ToolCallID string         `json:"tool_call_id,omitempty"`
+	Name       string         `json:"name"`
+	Response   map[string]any `json:"response"`
 }
 
 // ConversationTurn is one message in the conversation (user or model).

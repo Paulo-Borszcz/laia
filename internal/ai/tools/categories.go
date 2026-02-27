@@ -7,7 +7,6 @@ import (
 
 	"github.com/lojasmm/laia/internal/ai"
 	"github.com/lojasmm/laia/internal/glpi"
-	"google.golang.org/genai"
 )
 
 // --- GetDepartments ---
@@ -25,7 +24,7 @@ func (t *GetDepartments) Name() string { return "get_departments" }
 func (t *GetDepartments) Description() string {
 	return "Lista os departamentos/setores disponíveis para chamados (formulários do Nexus)"
 }
-func (t *GetDepartments) Parameters() *genai.Schema { return nil }
+func (t *GetDepartments) Parameters() *ai.ParamSchema { return nil }
 
 func (t *GetDepartments) Execute(_ context.Context, _ map[string]any) (map[string]any, error) {
 	forms, err := t.glpi.GetForms(t.sessionToken)
@@ -35,7 +34,6 @@ func (t *GetDepartments) Execute(_ context.Context, _ map[string]any) (map[strin
 
 	items := make([]map[string]any, 0, len(forms))
 	for _, f := range forms {
-		// Filtrar formulários-guia que não são departamentos reais
 		if f.Name == "Abro chamado a quem? GUIA" || f.Name == "Abrir Chamado Loja" {
 			continue
 		}
@@ -62,11 +60,11 @@ func (t *GetDepartmentCategories) Name() string { return "get_department_categor
 func (t *GetDepartmentCategories) Description() string {
 	return "Lista as categorias de chamado disponíveis para um departamento/formulário. Retorna as categorias ITIL que o usuário pode selecionar."
 }
-func (t *GetDepartmentCategories) Parameters() *genai.Schema {
-	return &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"department_id": {Type: genai.TypeInteger, Description: "ID do departamento/formulário"},
+func (t *GetDepartmentCategories) Parameters() *ai.ParamSchema {
+	return &ai.ParamSchema{
+		Type: "object",
+		Properties: map[string]*ai.ParamSchema{
+			"department_id": {Type: "integer", Description: "ID do departamento/formulário"},
 		},
 		Required: []string{"department_id"},
 	}
@@ -78,13 +76,11 @@ func (t *GetDepartmentCategories) Execute(_ context.Context, args map[string]any
 		return nil, err
 	}
 
-	// Busca seções do formulário
 	sections, err := t.glpi.GetFormSections(t.sessionToken, formID)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao buscar seções do formulário: %w", err)
 	}
 
-	// Procura a primeira question do tipo dropdown/ITILCategory para extrair o tree_root
 	for _, s := range sections {
 		questions, err := t.glpi.GetSectionQuestions(t.sessionToken, s.ID)
 		if err != nil {
@@ -96,7 +92,6 @@ func (t *GetDepartmentCategories) Execute(_ context.Context, args map[string]any
 				continue
 			}
 
-			// Extrair show_tree_root do campo values (JSON string)
 			var vals dropdownValues
 			if err := json.Unmarshal([]byte(q.Values), &vals); err != nil {
 				continue
@@ -107,7 +102,6 @@ func (t *GetDepartmentCategories) Execute(_ context.Context, args map[string]any
 				fmt.Sscanf(vals.ShowTreeRoot, "%d", &rootID)
 			}
 
-			// Usa admin session para ler categorias ITIL (usuário normal não tem permissão)
 			adminSession, err := t.glpi.AdminSession()
 			if err != nil {
 				return nil, fmt.Errorf("erro ao criar sessão admin: %w", err)
@@ -159,11 +153,11 @@ func (t *GetSubCategories) Name() string { return "get_subcategories" }
 func (t *GetSubCategories) Description() string {
 	return "Lista as sub-categorias de uma categoria ITIL. Use quando uma categoria tem filhas e você precisa aprofundar."
 }
-func (t *GetSubCategories) Parameters() *genai.Schema {
-	return &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"category_id": {Type: genai.TypeInteger, Description: "ID da categoria pai"},
+func (t *GetSubCategories) Parameters() *ai.ParamSchema {
+	return &ai.ParamSchema{
+		Type: "object",
+		Properties: map[string]*ai.ParamSchema{
+			"category_id": {Type: "integer", Description: "ID da categoria pai"},
 		},
 		Required: []string{"category_id"},
 	}

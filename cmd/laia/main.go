@@ -19,7 +19,6 @@ import (
 	"github.com/lojasmm/laia/internal/glpi"
 	"github.com/lojasmm/laia/internal/store"
 	"github.com/lojasmm/laia/internal/whatsapp"
-	"google.golang.org/genai"
 )
 
 func main() {
@@ -37,16 +36,7 @@ func main() {
 	glpiClient := glpi.NewClient(cfg.NexusBaseURL, cfg.NexusAppToken, cfg.NexusAdminToken, cfg.NexusAdminProfile)
 	waClient := whatsapp.NewClient(cfg.WAPhoneNumberID, cfg.WAAccessToken)
 
-	ctx := context.Background()
-	geminiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  cfg.GeminiAPIKey,
-		Backend: genai.BackendGeminiAPI,
-	})
-	if err != nil {
-		log.Fatalf("gemini: %v", err)
-	}
-
-	agent := ai.NewAgent(geminiClient, glpiClient, db, aitools.BuildRegistry)
+	agent := ai.NewAgent(cfg.OpenAIAPIKey, glpiClient, db, aitools.BuildRegistry)
 
 	botHandler := bot.NewHandler(waClient, db, cfg.BaseURL, agent)
 	authHandler := auth.NewHandler(glpiClient, db, waClient)

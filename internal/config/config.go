@@ -20,7 +20,7 @@ type Config struct {
 	WAAccessToken   string
 	WAVerifyToken   string
 
-	GeminiAPIKey string
+	OpenAIAPIKey string
 
 	BaseURL string
 	Port    string
@@ -38,7 +38,7 @@ func Load() (*Config, error) {
 		WAPhoneNumberID:   os.Getenv("WA_PHONE_NUMBER_ID"),
 		WAAccessToken:   os.Getenv("WA_ACCESS_TOKEN"),
 		WAVerifyToken:   os.Getenv("WA_VERIFY_TOKEN"),
-		GeminiAPIKey:    os.Getenv("GEMINI_API_KEY"),
+		OpenAIAPIKey:    os.Getenv("OPENAI_API_KEY"),
 		BaseURL:         os.Getenv("BASE_URL"),
 		Port:            os.Getenv("PORT"),
 	}
@@ -66,7 +66,7 @@ func Load() (*Config, error) {
 		{"NEXUS_APP_TOKEN", cfg.NexusAppToken},
 		{"WA_PHONE_NUMBER_ID", cfg.WAPhoneNumberID},
 		{"WA_ACCESS_TOKEN", cfg.WAAccessToken},
-		{"GEMINI_API_KEY", cfg.GeminiAPIKey},
+		{"OPENAI_API_KEY", cfg.OpenAIAPIKey},
 	} {
 		if req.val == "" {
 			return nil, fmt.Errorf("required env var %s is not set", req.name)

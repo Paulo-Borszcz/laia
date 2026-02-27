@@ -33,7 +33,6 @@ func intArg(args map[string]any, key string) (int, error) {
 	if !ok {
 		return 0, fmt.Errorf("parâmetro obrigatório ausente: %s", key)
 	}
-	// Gemini sends numbers as float64 in JSON
 	switch n := v.(type) {
 	case float64:
 		if n != math.Trunc(n) {

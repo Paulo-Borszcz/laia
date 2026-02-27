@@ -6,7 +6,6 @@ import (
 
 	"github.com/lojasmm/laia/internal/ai"
 	"github.com/lojasmm/laia/internal/glpi"
-	"google.golang.org/genai"
 )
 
 // --- ListMyTickets ---
@@ -24,7 +23,7 @@ func (t *ListMyTickets) Name() string { return "list_my_tickets" }
 func (t *ListMyTickets) Description() string {
 	return "Lista todos os chamados do usuário atual no Nexus/GLPI"
 }
-func (t *ListMyTickets) Parameters() *genai.Schema { return nil }
+func (t *ListMyTickets) Parameters() *ai.ParamSchema { return nil }
 
 func (t *ListMyTickets) Execute(_ context.Context, _ map[string]any) (map[string]any, error) {
 	tickets, err := t.glpi.GetMyTickets(t.sessionToken)
@@ -60,11 +59,11 @@ func (t *GetTicket) Name() string { return "get_ticket" }
 func (t *GetTicket) Description() string {
 	return "Retorna detalhes de um chamado específico pelo ID"
 }
-func (t *GetTicket) Parameters() *genai.Schema {
-	return &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"ticket_id": {Type: genai.TypeInteger, Description: "ID do chamado"},
+func (t *GetTicket) Parameters() *ai.ParamSchema {
+	return &ai.ParamSchema{
+		Type: "object",
+		Properties: map[string]*ai.ParamSchema{
+			"ticket_id": {Type: "integer", Description: "ID do chamado"},
 		},
 		Required: []string{"ticket_id"},
 	}
@@ -82,14 +81,14 @@ func (t *GetTicket) Execute(_ context.Context, args map[string]any) (map[string]
 	}
 
 	return map[string]any{
-		"id":        ticket.ID,
-		"titulo":    ticket.Name,
-		"descricao": ticket.Content,
-		"status":    ticketStatusLabel(ticket.Status),
-		"urgencia":  urgencyLabel(ticket.Urgency),
-		"prioridade": priorityLabel(ticket.Priority),
-		"categoria": ticket.ITILCategoriesID,
-		"criado_em": ticket.DateCreated,
+		"id":            ticket.ID,
+		"titulo":        ticket.Name,
+		"descricao":     ticket.Content,
+		"status":        ticketStatusLabel(ticket.Status),
+		"urgencia":      urgencyLabel(ticket.Urgency),
+		"prioridade":    priorityLabel(ticket.Priority),
+		"categoria":     ticket.ITILCategoriesID,
+		"criado_em":     ticket.DateCreated,
 		"atualizado_em": ticket.DateMod,
 	}, nil
 }
@@ -109,17 +108,14 @@ func (t *CreateTicket) Name() string { return "create_ticket" }
 func (t *CreateTicket) Description() string {
 	return "Cria um novo chamado no Nexus/GLPI. Use somente após confirmação do usuário."
 }
-func (t *CreateTicket) Parameters() *genai.Schema {
-	return &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"title":       {Type: genai.TypeString, Description: "Título do chamado"},
-			"description": {Type: genai.TypeString, Description: "Descrição detalhada do problema"},
-			"category_id": {Type: genai.TypeInteger, Description: "ID da categoria ITIL (obrigatório, obtido via get_department_categories)"},
-			"urgency": {
-				Type:        genai.TypeInteger,
-				Description: "Urgência: 1=Muito baixa, 2=Baixa, 3=Média, 4=Alta, 5=Muito alta",
-			},
+func (t *CreateTicket) Parameters() *ai.ParamSchema {
+	return &ai.ParamSchema{
+		Type: "object",
+		Properties: map[string]*ai.ParamSchema{
+			"title":       {Type: "string", Description: "Título do chamado"},
+			"description": {Type: "string", Description: "Descrição detalhada do problema"},
+			"category_id": {Type: "integer", Description: "ID da categoria ITIL (obrigatório, obtido via get_department_categories)"},
+			"urgency":     {Type: "integer", Description: "Urgência: 1=Muito baixa, 2=Baixa, 3=Média, 4=Alta, 5=Muito alta"},
 		},
 		Required: []string{"title", "description", "category_id"},
 	}
@@ -170,12 +166,12 @@ func (t *UpdateTicketStatus) Name() string { return "update_ticket_status" }
 func (t *UpdateTicketStatus) Description() string {
 	return "Atualiza o status de um chamado. Status: 1=Novo, 2=Atribuído, 3=Planejado, 4=Pendente, 5=Solucionado, 6=Fechado"
 }
-func (t *UpdateTicketStatus) Parameters() *genai.Schema {
-	return &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"ticket_id": {Type: genai.TypeInteger, Description: "ID do chamado"},
-			"status":    {Type: genai.TypeInteger, Description: "Novo status (5=Solucionado, 6=Fechado)"},
+func (t *UpdateTicketStatus) Parameters() *ai.ParamSchema {
+	return &ai.ParamSchema{
+		Type: "object",
+		Properties: map[string]*ai.ParamSchema{
+			"ticket_id": {Type: "integer", Description: "ID do chamado"},
+			"status":    {Type: "integer", Description: "Novo status (5=Solucionado, 6=Fechado)"},
 		},
 		Required: []string{"ticket_id", "status"},
 	}
@@ -216,12 +212,12 @@ func (t *AddFollowup) Name() string { return "add_followup" }
 func (t *AddFollowup) Description() string {
 	return "Adiciona um comentário (followup) a um chamado existente"
 }
-func (t *AddFollowup) Parameters() *genai.Schema {
-	return &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"ticket_id": {Type: genai.TypeInteger, Description: "ID do chamado"},
-			"content":   {Type: genai.TypeString, Description: "Texto do comentário"},
+func (t *AddFollowup) Parameters() *ai.ParamSchema {
+	return &ai.ParamSchema{
+		Type: "object",
+		Properties: map[string]*ai.ParamSchema{
+			"ticket_id": {Type: "integer", Description: "ID do chamado"},
+			"content":   {Type: "string", Description: "Texto do comentário"},
 		},
 		Required: []string{"ticket_id", "content"},
 	}
@@ -263,11 +259,11 @@ func (t *GetFollowups) Name() string { return "get_followups" }
 func (t *GetFollowups) Description() string {
 	return "Lista os comentários (followups) de um chamado"
 }
-func (t *GetFollowups) Parameters() *genai.Schema {
-	return &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"ticket_id": {Type: genai.TypeInteger, Description: "ID do chamado"},
+func (t *GetFollowups) Parameters() *ai.ParamSchema {
+	return &ai.ParamSchema{
+		Type: "object",
+		Properties: map[string]*ai.ParamSchema{
+			"ticket_id": {Type: "integer", Description: "ID do chamado"},
 		},
 		Required: []string{"ticket_id"},
 	}

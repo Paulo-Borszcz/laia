@@ -6,7 +6,6 @@ import (
 
 	"github.com/lojasmm/laia/internal/ai"
 	"github.com/lojasmm/laia/internal/glpi"
-	"google.golang.org/genai"
 )
 
 type SearchAssets struct {
@@ -22,15 +21,12 @@ func (t *SearchAssets) Name() string { return "search_assets" }
 func (t *SearchAssets) Description() string {
 	return "Busca ativos de TI (computadores, monitores, impressoras) por nome ou número de série"
 }
-func (t *SearchAssets) Parameters() *genai.Schema {
-	return &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"type": {
-				Type:        genai.TypeString,
-				Description: "Tipo de ativo: Computer, Monitor, Printer, Phone, NetworkEquipment",
-			},
-			"query": {Type: genai.TypeString, Description: "Termo de busca (nome, serial, etc.)"},
+func (t *SearchAssets) Parameters() *ai.ParamSchema {
+	return &ai.ParamSchema{
+		Type: "object",
+		Properties: map[string]*ai.ParamSchema{
+			"type":  {Type: "string", Description: "Tipo de ativo: Computer, Monitor, Printer, Phone, NetworkEquipment"},
+			"query": {Type: "string", Description: "Termo de busca (nome, serial, etc.)"},
 		},
 		Required: []string{"type", "query"},
 	}

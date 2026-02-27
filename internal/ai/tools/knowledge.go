@@ -6,7 +6,6 @@ import (
 
 	"github.com/lojasmm/laia/internal/ai"
 	"github.com/lojasmm/laia/internal/glpi"
-	"google.golang.org/genai"
 )
 
 // --- SearchKnowledgeBase ---
@@ -24,11 +23,11 @@ func (t *SearchKnowledgeBase) Name() string { return "search_knowledge_base" }
 func (t *SearchKnowledgeBase) Description() string {
 	return "Busca artigos na base de conhecimento do Nexus/GLPI por palavra-chave"
 }
-func (t *SearchKnowledgeBase) Parameters() *genai.Schema {
-	return &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"query": {Type: genai.TypeString, Description: "Termo de busca (ex: VPN, email, impressora)"},
+func (t *SearchKnowledgeBase) Parameters() *ai.ParamSchema {
+	return &ai.ParamSchema{
+		Type: "object",
+		Properties: map[string]*ai.ParamSchema{
+			"query": {Type: "string", Description: "Termo de busca (ex: VPN, email, impressora)"},
 		},
 		Required: []string{"query"},
 	}
@@ -70,11 +69,11 @@ func (t *GetKBArticle) Name() string { return "get_kb_article" }
 func (t *GetKBArticle) Description() string {
 	return "Retorna o conteúdo completo de um artigo da base de conhecimento"
 }
-func (t *GetKBArticle) Parameters() *genai.Schema {
-	return &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"article_id": {Type: genai.TypeInteger, Description: "ID do artigo"},
+func (t *GetKBArticle) Parameters() *ai.ParamSchema {
+	return &ai.ParamSchema{
+		Type: "object",
+		Properties: map[string]*ai.ParamSchema{
+			"article_id": {Type: "integer", Description: "ID do artigo"},
 		},
 		Required: []string{"article_id"},
 	}

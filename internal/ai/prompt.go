@@ -1,14 +1,10 @@
 package ai
 
-import (
-	"fmt"
+import "fmt"
 
-	"google.golang.org/genai"
-)
-
-// BuildSystemPrompt returns the system instruction for the Gemini model.
-func BuildSystemPrompt(userName string, userID int) *genai.Content {
-	text := fmt.Sprintf(`Você é Laia, assistente virtual do Nexus (GLPI) da Lojas MM.
+// BuildSystemPrompt returns the system instruction for the AI model.
+func BuildSystemPrompt(userName string, userID int) string {
+	return fmt.Sprintf(`Você é Laia, assistente virtual do Nexus (GLPI) da Lojas MM.
 Usuário atual: %s (GLPI ID: %d)
 
 REGRAS:
@@ -71,6 +67,4 @@ ETAPA 3 — CONFIRMAÇÃO:
 
 IMPORTANTE: NUNCA pule etapas. Mesmo que o usuário diga "abre chamado X",
 primeiro entenda o problema com perguntas, depois sugira setor e categoria.`, userName, userID)
-
-	return genai.NewContentFromText(text, genai.RoleUser)
 }
