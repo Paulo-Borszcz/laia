@@ -107,9 +107,18 @@ type InteractiveBody struct {
 }
 
 type InteractiveAction struct {
-	Buttons  []Button  `json:"buttons,omitempty"`
-	Button   string    `json:"button,omitempty"`
-	Sections []Section `json:"sections,omitempty"`
+	Buttons    []Button        `json:"buttons,omitempty"`
+	Button     string          `json:"button,omitempty"`
+	Sections   []Section       `json:"sections,omitempty"`
+	Name       string          `json:"name,omitempty"`
+	Parameters *CTAURLParams   `json:"parameters,omitempty"`
+}
+
+// CTAURLParams holds the parameters for a cta_url interactive message.
+// Reference: https://developers.facebook.com/docs/whatsapp/cloud-api/messages/interactive-cta-url-messages
+type CTAURLParams struct {
+	DisplayText string `json:"display_text"`
+	URL         string `json:"url"`
 }
 
 // Section and SectionRow support list-type interactive messages.

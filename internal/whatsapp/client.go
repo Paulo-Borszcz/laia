@@ -51,6 +51,26 @@ func (c *Client) SendInteractiveButtons(to, body string, buttons []Button) error
 	return c.send(msg)
 }
 
+// SendCTAButton sends an interactive message with a call-to-action URL button.
+// Reference: https://developers.facebook.com/docs/whatsapp/cloud-api/messages/interactive-cta-url-messages
+func (c *Client) SendCTAButton(to, body, buttonText, url string) error {
+	msg := SendMessageRequest{
+		MessagingProduct: "whatsapp",
+		RecipientType:    "individual",
+		To:               to,
+		Type:             "interactive",
+		Interactive: &Interactive{
+			Type: "cta_url",
+			Body: InteractiveBody{Text: body},
+			Action: InteractiveAction{
+				Name:       "cta_url",
+				Parameters: &CTAURLParams{DisplayText: buttonText, URL: url},
+			},
+		},
+	}
+	return c.send(msg)
+}
+
 func (c *Client) SendList(to, body, buttonText string, sections []Section) error {
 	msg := SendMessageRequest{
 		MessagingProduct: "whatsapp",

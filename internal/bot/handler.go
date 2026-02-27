@@ -38,11 +38,15 @@ func (h *Handler) HandleMessage(phone, text string) {
 
 func (h *Handler) sendVerificationLink(phone string) {
 	link := fmt.Sprintf("%s/auth/verify?phone=%s", h.authURL, phone)
-	msg := fmt.Sprintf(
-		"Olá! Para usar este serviço, primeiro vincule seu WhatsApp ao Nexus.\n\nAcesse: %s",
-		link,
-	)
-	if err := h.wa.SendText(phone, msg); err != nil {
+	body := "Olá! Eu sou a *Laia*, sua assistente virtual do *Nexus* aqui nas Lojas MM.\n\n" +
+		"Comigo você pode:\n" +
+		"• Abrir e acompanhar chamados\n" +
+		"• Consultar a base de conhecimento\n" +
+		"• Verificar seus ativos de TI\n\n" +
+		"Para começarmos, preciso vincular seu WhatsApp à sua conta do Nexus. " +
+		"É rápido — basta clicar no botão abaixo!"
+
+	if err := h.wa.SendCTAButton(phone, body, "Vincular conta", link); err != nil {
 		log.Printf("bot: failed to send verification link to %s: %v", phone, err)
 	}
 }
