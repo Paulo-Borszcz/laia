@@ -52,8 +52,24 @@ func (h *WebhookHandler) HandleIncoming(w http.ResponseWriter, r *http.Request) 
 	for _, entry := range payload.Entry {
 		for _, change := range entry.Changes {
 			for _, msg := range change.Value.Messages {
-				if msg.Type == "text" && msg.Text != nil {
-					h.onMessage(msg.From, msg.Text.Body)
+				switch msg.Type {
+				case "text":
+					if msg.Text != nil {
+						h.onMessage(msg.From, msg.Text.Body)
+					}
+				case "interactive":
+					if msg.Interactive != nil {
+						switch msg.Interactive.Type {
+						case "button_reply":
+							if msg.Interactive.ButtonReply != nil {
+								h.onMessage(msg.From, msg.Interactive.ButtonReply.Title)
+							}
+						case "list_reply":
+							if msg.Interactive.ListReply != nil {
+								h.onMessage(msg.From, msg.Interactive.ListReply.Title)
+							}
+						}
+					}
 				}
 			}
 		}

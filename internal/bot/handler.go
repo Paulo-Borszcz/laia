@@ -49,14 +49,47 @@ func (h *Handler) sendVerificationLink(phone string) {
 
 func (h *Handler) handleCommand(user *store.User, phone, text string) {
 	ctx := context.Background()
-	reply, err := h.agent.Handle(ctx, user, phone, text)
+	resp, err := h.agent.Handle(ctx, user, phone, text)
 	if err != nil {
 		log.Printf("bot: agent error for %s: %v", phone, err)
 		h.wa.SendText(phone, "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente mais tarde.")
 		return
 	}
 
-	if err := h.wa.SendText(phone, reply); err != nil {
-		log.Printf("bot: failed to send reply to %s: %v", phone, err)
+	var sendErr error
+	switch {
+	case len(resp.Buttons) > 0:
+		sendErr = h.wa.SendInteractiveButtons(phone, resp.Text, toWAButtons(resp.Buttons))
+	case resp.List != nil:
+		sendErr = h.wa.SendList(phone, resp.Text, resp.List.ButtonText, toWASections(resp.List.Sections))
+	default:
+		sendErr = h.wa.SendText(phone, resp.Text)
 	}
+
+	if sendErr != nil {
+		log.Printf("bot: failed to send reply to %s: %v", phone, sendErr)
+	}
+}
+
+func toWAButtons(buttons []ai.ButtonOption) []whatsapp.Button {
+	wa := make([]whatsapp.Button, len(buttons))
+	for i, b := range buttons {
+		wa[i] = whatsapp.Button{
+			Type:  "reply",
+			Reply: whatsapp.ButtonReply{ID: b.ID, Title: b.Title},
+		}
+	}
+	return wa
+}
+
+func toWASections(sections []ai.ListSection) []whatsapp.Section {
+	wa := make([]whatsapp.Section, len(sections))
+	for i, s := range sections {
+		rows := make([]whatsapp.SectionRow, len(s.Rows))
+		for j, r := range s.Rows {
+			rows[j] = whatsapp.SectionRow{ID: r.ID, Title: r.Title, Description: r.Description}
+		}
+		wa[i] = whatsapp.Section{Title: s.Title, Rows: rows}
+	}
+	return wa
 }

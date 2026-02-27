@@ -51,6 +51,24 @@ func (c *Client) SendInteractiveButtons(to, body string, buttons []Button) error
 	return c.send(msg)
 }
 
+func (c *Client) SendList(to, body, buttonText string, sections []Section) error {
+	msg := SendMessageRequest{
+		MessagingProduct: "whatsapp",
+		RecipientType:    "individual",
+		To:               to,
+		Type:             "interactive",
+		Interactive: &Interactive{
+			Type: "list",
+			Body: InteractiveBody{Text: body},
+			Action: InteractiveAction{
+				Button:   buttonText,
+				Sections: sections,
+			},
+		},
+	}
+	return c.send(msg)
+}
+
 func (c *Client) send(msg SendMessageRequest) error {
 	payload, err := json.Marshal(msg)
 	if err != nil {

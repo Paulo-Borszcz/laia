@@ -22,6 +22,7 @@ type ParamSchema struct {
 	Properties  map[string]*ParamSchema `json:"properties,omitempty"`
 	Required    []string                `json:"required,omitempty"`
 	Enum        []string                `json:"enum,omitempty"`
+	Items       *ParamSchema            `json:"items,omitempty"`
 }
 
 // Tool is a single function the AI agent can call.
@@ -198,6 +199,9 @@ func schemaToMap(s *ParamSchema) map[string]any {
 	}
 	if len(s.Enum) > 0 {
 		m["enum"] = s.Enum
+	}
+	if s.Items != nil {
+		m["items"] = schemaToMap(s.Items)
 	}
 	return m
 }

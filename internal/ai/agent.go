@@ -102,9 +102,9 @@ type chatChoice struct {
 }
 
 // Handle processes one user message through the AI agent loop.
-func (a *Agent) Handle(ctx context.Context, user *store.User, phone, text string) (string, error) {
+func (a *Agent) Handle(ctx context.Context, user *store.User, phone, text string) (*Response, error) {
 	if !a.allowRequest(phone) {
-		return "Você está enviando mensagens muito rápido. Aguarde um minuto e tente novamente.", nil
+		return &Response{Text: "Você está enviando mensagens muito rápido. Aguarde um minuto e tente novamente."}, nil
 	}
 
 	history, err := a.store.GetHistory(phone)
@@ -114,7 +114,7 @@ func (a *Agent) Handle(ctx context.Context, user *store.User, phone, text string
 
 	sessionToken, err := a.glpi.InitSession(user.UserToken)
 	if err != nil {
-		return "", fmt.Errorf("initSession: %w", err)
+		return nil, fmt.Errorf("initSession: %w", err)
 	}
 	defer a.glpi.KillSession(sessionToken)
 
@@ -149,11 +149,11 @@ func (a *Agent) Handle(ctx context.Context, user *store.User, phone, text string
 	for range maxToolIterations {
 		resp, err := a.chatCompletion(ctx, messages, toolsAny)
 		if err != nil {
-			return "", fmt.Errorf("chatCompletion: %w", err)
+			return nil, fmt.Errorf("chatCompletion: %w", err)
 		}
 
 		if len(resp.Choices) == 0 {
-			return "Desculpe, não consegui processar sua mensagem. Tente novamente.", nil
+			return &Response{Text: "Desculpe, não consegui processar sua mensagem. Tente novamente."}, nil
 		}
 
 		msg := resp.Choices[0].Message
@@ -166,10 +166,19 @@ func (a *Agent) Handle(ctx context.Context, user *store.User, phone, text string
 				responseText = "Desculpe, não consegui gerar uma resposta."
 			}
 			a.saveHistory(phone, allTurns)
-			return responseText, nil
+			return &Response{Text: responseText}, nil
 		}
 
 		for _, tc := range msg.ToolCalls {
+			// Intercept respond_interactive pseudo-tool
+			if tc.Function.Name == "respond_interactive" {
+				var args map[string]any
+				json.Unmarshal([]byte(tc.Function.Arguments), &args)
+				r := parseInteractiveResponse(args)
+				a.saveHistory(phone, allTurns)
+				return r, nil
+			}
+
 			// Doom loop check
 			sig := tc.Function.Name + ":" + tc.Function.Arguments
 			if sig == lastToolSig {
@@ -181,7 +190,7 @@ func (a *Agent) Handle(ctx context.Context, user *store.User, phone, text string
 			if sameToolCount > doomLoopThreshold {
 				log.Printf("agent: doom loop detected for tool %s (%s)", tc.Function.Name, phone)
 				a.saveHistory(phone, allTurns)
-				return "Desculpe, encontrei um problema ao processar sua solicitação. Tente novamente ou reformule seu pedido.", nil
+				return &Response{Text: "Desculpe, encontrei um problema ao processar sua solicitação. Tente novamente ou reformule seu pedido."}, nil
 			}
 
 			var args map[string]any
@@ -213,7 +222,68 @@ func (a *Agent) Handle(ctx context.Context, user *store.User, phone, text string
 	}
 
 	a.saveHistory(phone, allTurns)
-	return "Desculpe, a operação ficou complexa demais. Tente reformular seu pedido.", nil
+	return &Response{Text: "Desculpe, a operação ficou complexa demais. Tente reformular seu pedido."}, nil
+}
+
+// parseInteractiveResponse converts respond_interactive tool args into a Response.
+func parseInteractiveResponse(args map[string]any) *Response {
+	resp := &Response{}
+
+	if text, ok := args["text"].(string); ok {
+		resp.Text = text
+	}
+
+	msgType, _ := args["message_type"].(string)
+
+	switch msgType {
+	case "buttons":
+		if buttons, ok := args["buttons"].([]any); ok {
+			for _, b := range buttons {
+				btn, ok := b.(map[string]any)
+				if !ok {
+					continue
+				}
+				id, _ := btn["id"].(string)
+				title, _ := btn["title"].(string)
+				resp.Buttons = append(resp.Buttons, ButtonOption{ID: id, Title: title})
+			}
+		}
+	case "list":
+		list := &ListOption{}
+		if bt, ok := args["list_button_text"].(string); ok {
+			list.ButtonText = bt
+		}
+		if list.ButtonText == "" {
+			list.ButtonText = "Ver opções"
+		}
+		if sections, ok := args["sections"].([]any); ok {
+			for _, s := range sections {
+				sec, ok := s.(map[string]any)
+				if !ok {
+					continue
+				}
+				section := ListSection{}
+				section.Title, _ = sec["title"].(string)
+				if rows, ok := sec["rows"].([]any); ok {
+					for _, r := range rows {
+						row, ok := r.(map[string]any)
+						if !ok {
+							continue
+						}
+						lr := ListRow{}
+						lr.ID, _ = row["id"].(string)
+						lr.Title, _ = row["title"].(string)
+						lr.Description, _ = row["description"].(string)
+						section.Rows = append(section.Rows, lr)
+					}
+				}
+				list.Sections = append(list.Sections, section)
+			}
+		}
+		resp.List = list
+	}
+
+	return resp
 }
 
 // retryableStatus returns true for HTTP status codes worth retrying.

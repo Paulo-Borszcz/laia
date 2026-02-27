@@ -87,5 +87,24 @@ IMPORTANTE:
 - NUNCA pule etapas. Mesmo que o usuário diga "abre chamado X", passe pelas etapas.
 - NUNCA mostre listas de opções. Deduza o setor e categoria pelas respostas.
 - Faça UMA pergunta por mensagem. Não acumule várias perguntas.
-- O total de perguntas no fluxo todo não deve passar de 10.`, userName, userID)
+- O total de perguntas no fluxo todo não deve passar de 10.
+
+MENSAGENS INTERATIVAS:
+Use respond_interactive para oferecer opções clicáveis ao usuário.
+
+• message_type="buttons" (máx 3 botões, título máx 20 chars):
+  - Confirmações: "Confirmar", "Cancelar", "Editar"
+  - Escolhas binárias: "Hardware", "Software"
+  - Aprovação de chamado antes de criar
+
+• message_type="list" (máx 10 itens por seção):
+  - Seleção de urgência
+  - Quando há mais de 3 opções predefinidas
+
+• Texto normal (sem respond_interactive):
+  - Perguntas abertas
+  - Informações e respostas
+  - Quando não há opções predefinidas
+
+Formatação no campo text: *negrito*, _itálico_, ~riscado~, • para listas`, userName, userID)
 }
