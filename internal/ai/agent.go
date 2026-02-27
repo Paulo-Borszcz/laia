@@ -21,6 +21,18 @@ const (
 	rateLimitMax      = 10
 	openAIModel       = "gpt-4.1-mini"
 	openAIEndpoint    = "https://api.openai.com/v1/chat/completions"
+	maxTokens         = 2048
+
+	// Retry settings (exponential backoff, inspired by opencode)
+	retryMaxAttempts  = 3
+	retryInitialDelay = 2 * time.Second
+	retryMaxDelay     = 30 * time.Second
+
+	// History pruning: tool responses older than this many turns get compressed
+	pruneKeepRecent = 4
+
+	// Doom loop: max consecutive calls to the same tool with same args
+	doomLoopThreshold = 2
 )
 
 // RegistryBuilder creates a tool registry for a given GLPI session.
@@ -60,6 +72,7 @@ type chatRequest struct {
 	Messages    []chatMessage `json:"messages"`
 	Tools       []any         `json:"tools,omitempty"`
 	Temperature float32       `json:"temperature"`
+	MaxTokens   int           `json:"max_tokens,omitempty"`
 }
 
 type chatMessage struct {
@@ -129,6 +142,10 @@ func (a *Agent) Handle(ctx context.Context, user *store.User, phone, text string
 		toolsAny[i] = t
 	}
 
+	// Doom loop detection: track consecutive identical tool calls
+	var lastToolSig string
+	var sameToolCount int
+
 	for range maxToolIterations {
 		resp, err := a.chatCompletion(ctx, messages, toolsAny)
 		if err != nil {
@@ -153,19 +170,27 @@ func (a *Agent) Handle(ctx context.Context, user *store.User, phone, text string
 		}
 
 		for _, tc := range msg.ToolCalls {
+			// Doom loop check
+			sig := tc.Function.Name + ":" + tc.Function.Arguments
+			if sig == lastToolSig {
+				sameToolCount++
+			} else {
+				lastToolSig = sig
+				sameToolCount = 1
+			}
+			if sameToolCount > doomLoopThreshold {
+				log.Printf("agent: doom loop detected for tool %s (%s)", tc.Function.Name, phone)
+				a.saveHistory(phone, allTurns)
+				return "Desculpe, encontrei um problema ao processar sua solicitação. Tente novamente ou reformule seu pedido.", nil
+			}
+
 			var args map[string]any
 			json.Unmarshal([]byte(tc.Function.Arguments), &args)
 
-			tool, toolErr := registry.Get(tc.Function.Name)
-			var result map[string]any
+			log.Printf("agent: calling tool %s for %s", tc.Function.Name, phone)
+			result, toolErr := registry.ExecuteTool(ctx, tc.Function.Name, args)
 			if toolErr != nil {
 				result = map[string]any{"error": toolErr.Error()}
-			} else {
-				log.Printf("agent: calling tool %s for %s", tc.Function.Name, phone)
-				result, toolErr = tool.Execute(ctx, args)
-				if toolErr != nil {
-					result = map[string]any{"error": toolErr.Error()}
-				}
 			}
 
 			resultJSON, _ := json.Marshal(result)
@@ -191,11 +216,17 @@ func (a *Agent) Handle(ctx context.Context, user *store.User, phone, text string
 	return "Desculpe, a operação ficou complexa demais. Tente reformular seu pedido.", nil
 }
 
+// retryableStatus returns true for HTTP status codes worth retrying.
+func retryableStatus(code int) bool {
+	return code == 429 || code == 500 || code == 502 || code == 503
+}
+
 func (a *Agent) chatCompletion(ctx context.Context, messages []chatMessage, tools []any) (*chatResponse, error) {
 	reqBody := chatRequest{
 		Model:       openAIModel,
 		Messages:    messages,
 		Temperature: 0.3,
+		MaxTokens:   maxTokens,
 	}
 	if len(tools) > 0 {
 		reqBody.Tools = tools
@@ -206,34 +237,56 @@ func (a *Agent) chatCompletion(ctx context.Context, messages []chatMessage, tool
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", openAIEndpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+a.apiKey)
+	delay := retryInitialDelay
+	var lastErr error
 
-	resp, err := a.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+	for attempt := range retryMaxAttempts {
+		req, err := http.NewRequestWithContext(ctx, "POST", openAIEndpoint, bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+a.apiKey)
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+		resp, err := a.http.Do(req)
+		if err != nil {
+			lastErr = err
+			if attempt < retryMaxAttempts-1 {
+				log.Printf("agent: request error (attempt %d/%d): %v", attempt+1, retryMaxAttempts, err)
+				time.Sleep(delay)
+				delay = min(delay*2, retryMaxDelay)
+				continue
+			}
+			return nil, err
+		}
+
+		respBody, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		if retryableStatus(resp.StatusCode) && attempt < retryMaxAttempts-1 {
+			lastErr = fmt.Errorf("openai: status %d: %s", resp.StatusCode, string(respBody))
+			log.Printf("agent: retryable error (attempt %d/%d): %v", attempt+1, retryMaxAttempts, lastErr)
+			time.Sleep(delay)
+			delay = min(delay*2, retryMaxDelay)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("openai: status %d: %s", resp.StatusCode, string(respBody))
+		}
+
+		var chatResp chatResponse
+		if err := json.Unmarshal(respBody, &chatResp); err != nil {
+			return nil, fmt.Errorf("openai: unmarshal: %w", err)
+		}
+
+		return &chatResp, nil
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("openai: status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var chatResp chatResponse
-	if err := json.Unmarshal(respBody, &chatResp); err != nil {
-		return nil, fmt.Errorf("openai: unmarshal: %w", err)
-	}
-
-	return &chatResp, nil
+	return nil, fmt.Errorf("openai: max retries exceeded: %w", lastErr)
 }
 
 func (a *Agent) allowRequest(phone string) bool {
@@ -263,6 +316,7 @@ func (a *Agent) saveHistory(phone string, turns []store.ConversationTurn) {
 
 // toOpenAIMessages converts stored conversation turns to OpenAI chat messages.
 // Drops incompatible old Gemini-format history (role "model").
+// Compresses old tool responses to save tokens (keeps only recent ones full).
 func toOpenAIMessages(turns []store.ConversationTurn) []chatMessage {
 	for _, t := range turns {
 		if t.Role == "model" {
@@ -271,7 +325,9 @@ func toOpenAIMessages(turns []store.ConversationTurn) []chatMessage {
 	}
 
 	var messages []chatMessage
-	for _, t := range turns {
+	for i, t := range turns {
+		turnsFromEnd := len(turns) - i
+
 		switch t.Role {
 		case "user":
 			for _, p := range t.Parts {
@@ -300,18 +356,47 @@ func toOpenAIMessages(turns []store.ConversationTurn) []chatMessage {
 			messages = append(messages, msg)
 		case "tool":
 			for _, p := range t.Parts {
-				if p.FunctionResponse != nil {
-					resultJSON, _ := json.Marshal(p.FunctionResponse.Response)
-					messages = append(messages, chatMessage{
-						Role:       "tool",
-						Content:    string(resultJSON),
-						ToolCallID: p.FunctionResponse.ToolCallID,
-					})
+				if p.FunctionResponse == nil {
+					continue
 				}
+				content := ""
+				if turnsFromEnd <= pruneKeepRecent {
+					// Recent: keep full response
+					resultJSON, _ := json.Marshal(p.FunctionResponse.Response)
+					content = string(resultJSON)
+				} else {
+					// Old: compress to just tool name + status
+					content = compressToolResponse(p.FunctionResponse)
+				}
+				messages = append(messages, chatMessage{
+					Role:       "tool",
+					Content:    content,
+					ToolCallID: p.FunctionResponse.ToolCallID,
+				})
 			}
 		}
 	}
 	return messages
+}
+
+// compressToolResponse reduces an old tool response to a short summary to save tokens.
+func compressToolResponse(resp *store.FunctionRespPart) string {
+	if errMsg, ok := resp.Response["error"]; ok {
+		return fmt.Sprintf(`{"tool":"%s","status":"error","error":"%v"}`, resp.Name, errMsg)
+	}
+	// Summarize: keep key counts/IDs but drop full content
+	summary := map[string]any{"tool": resp.Name, "status": "ok"}
+	if total, ok := resp.Response["total"]; ok {
+		summary["total"] = total
+	}
+	if id, ok := resp.Response["id"]; ok {
+		summary["id"] = id
+	}
+	if msg, ok := resp.Response["mensagem"]; ok {
+		summary["mensagem"] = msg
+	}
+	out, _ := json.Marshal(summary)
+	return string(out)
 }
 
 func messageToTurn(msg chatMessage) store.ConversationTurn {
